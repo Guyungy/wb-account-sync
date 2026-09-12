@@ -8,6 +8,14 @@ venv/
 # macOS
 .DS_Store
 
-# 本地工具产物（不应入库）
+# Local artifacts and private operation records
 *.log
-~/.workbuddy-account-snapshots/
+dist/
+build/
+outputs/
+.coverage
+htmlcov/
+plan*.json
+journal.json
+.wb-account-sync-state
+.wb-account-sync-locks/

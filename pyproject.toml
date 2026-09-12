@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wb-account-sync"
+version = "0.2.0a1"
+description = "Offline, explicitly confirmed WorkBuddy session ownership migration safety preview"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "wb-account-sync contributors"}]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3",
+  "Topic :: System :: Recovery Tools",
+]
+dependencies = []
+
+[project.scripts]
+wb-account-sync = "wb_account_sync.cli:main"
+
+[project.urls]
+Repository = "https://github.com/Guyungy/wb-account-sync"
+Issues = "https://github.com/Guyungy/wb-account-sync/issues"
+
+[tool.setuptools]
+packages = ["wb_account_sync"]

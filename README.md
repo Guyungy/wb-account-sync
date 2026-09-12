@@ -1,246 +1,168 @@
 # wb-account-sync
 
-> WorkBuddy 跨账号数据保留 / 持续同步 / 备份 / 过户工具
-> Keep **all** your task history, automations, memory and connector logins when you switch accounts.
->
-> 让同一台机器上的所有 WorkBuddy 账号共享同一份完整数据 —— 装一次，之后切账号再也不丢东西。
+**0.2.0a1 · 安全预览版（Alpha），不是生产稳定版。**
 
-![platform](https://img.shields.io/badge/platform-macOS-black)
-![python](https://img.shields.io/badge/python-3.9%2B-blue)
-![deps](https://img.shields.io/badge/dependencies-stdlib%20only-brightgreen)
-![license](https://img.shields.io/badge/license-MIT-green)
+从个人脚本走向可安装、可验证的本地迁移工具。目前只支持：**同一客户端数据目录内，离线重归属普通会话的 `sessions.user_id`**。
 
----
+Offline, explicitly confirmed ownership migration for ordinary WorkBuddy sessions. Zero runtime dependencies. Not a full-account sync or backup product.
 
-## 问题是什么
+> 项目非官方，未获 WorkBuddy 或其厂商背书。只用于你本人有权管理的账户。客户端私有存储协议、界面展示和云同步行为尚未经过正式兼容认证。
 
-WorkBuddy 桌面端**同一时间只能登录一个账号**，而账号级数据是按 `user_id` 分开存的：
+## 先了解本次变化
 
-- 任务与对话历史存在 `sessions.user_id`
-- 自动化归 `automations.owner_user_id`
-- 长期记忆在 `memory/<uid>_memory.md`
-- 连接器授权在 `connectors/<uid>/`
-- 账号个人存储、渠道绑定也各账号一份
+旧版的“所有账号数据持续互通”承诺收回。新版优先保护数据，**不会自动迁移自动化、连接器密钥、渠道绑定和云端记忆缓存**。
 
-于是切换账号 = 界面变空。老账号那几十条任务、自动化和记忆都还在磁盘上，只是**看不见、也带不过去**。
+- 已拆分为 Python 包、命令入口、安全检查、执行核心和测试。
+- 原 `sync`、`live`、`daemon-*`、`adopt`、`backup`、`snapshots`、`revert` 命令已拒绝执行，退出码为 `2`。
+- 保留的 `restore` 是普通会话归属撤销，不是旧版整库快照恢复。
+- 安装/修改源码**不会停止已经在内存运行的旧守护进程**；旧进程下次重启执行新入口会拒绝 `live`，不会继续旧同步。升级前请阅读[旧版迁移指南](docs/MIGRATION.md)。
 
-本工具就是解决这件事，并提供三种力度：
+## 支持边界
 
-| 力度 | 命令 | 适用 |
-|---|---|---|
-| **持续同步**（推荐） | `daemon-install` | 装一次，之后账号一变就自动把全部账号数据带过来 |
-| 一次性同步 | `sync` | 手动跑一轮，可 `--dry-run` 先看 |
-| 备份 / 过户 / 回滚 | `backup` `adopt` `revert` `restore` | 需要单次搬运或反悔时 |
-
-## 效果
-
-| | 切换账号前 | 装完持续同步后 |
-|---|---|---|
-| 任务 / 对话历史 | 只剩当前账号自己那几条 | **全部账号的历史都在**（实测 62 条） |
-| 自动化 | 归原账号，新账号看不到 | 全部归当前账号并生效 |
-| 长期记忆 | 各账号一份，互不相通 | 各账号记忆块合并后共享 |
-| 连接器授权 | 各账号独立，要重登 | 凭据随账号整包带过来 |
-| 项目记录 / 工作区列表 | 本来就共享（设备级） | 不变 |
-
-## 原理：统一数据池 + 自动跟随当前账号
-
-```
-              ┌────────────────────────────────┐
-   账号 A ────┤                                │
-   账号 B ────┤   统一数据池（只增不删）        │
-   账号 C ────┤   ~/.workbuddy-account-sync/   │
-              │      pool/                     │
-              └────────────────────────────────┘
-                 ①吸 pull         ②回 push
-                 ▲                     │
-                 │                     ▼
-        各账号目录 / 数据库行     「当前登录账号」
-```
-
-- **① 吸（pull）**：把每个账号的账号级资产并入数据池。记忆按行去重取并集，连接器状态项并集，账号个人存储目录树并集 —— **只增不删，永不丢数据**。
-- **② 回（push）**：把池子内容回写到「当前登录账号」。数据库行做 `UPDATE` 重挂，文件做 upsert。
-- 当前账号的唯一权威来源是 `~/.workbuddy/storage/skeleton/account-snapshot.json` 里的 `primary.uid`（客户端登录 / 切换时会重写它）。
-
-结果：**无论你登录哪个账号，看到的都是同一份完整数据。**
-
-### 三层数据边界
-
-| 层级 | 内容 | 处理方式 |
-|---|---|---|
-| **账号级** | 任务/对话、自动化、长期记忆、连接器授权、账号个人存储、渠道绑定 | 本工具负责同步 |
-| **设备级** | 工作区列表（`workspaces` 表无 uid）、`skills/`、`mcp.json`、`models.json`、插件设置 | 天然全账号共享，**不需要也不应该动** |
-| **工作区级** | 项目文件、`<workDir>/.workbuddy/memory/` | 跟目录走，不跨工作区 / 设备 |
-
-会话内容资产（`tasks/` `traces/` `blobs/` `changes-*/` `file-history/` `artifact-index/`）
-是**设备级**、按 session id 命名、不含 `user_id` —— 重挂 `user_id` 后自然可见，无需搬运。
-
-## 快速开始
-
-**环境要求**：macOS + WorkBuddy 桌面端；Python 3.9+（只用标准库，零依赖）。
-
-```bash
-git clone https://github.com/Guyungy/wb-account-sync.git
-cd wb-account-sync
-chmod +x wb-account-sync.sh
-```
-
-```bash
-# 0. 看现状（只读，随时可跑）
-./wb-account-sync.sh status
-
-# 1. 留个回滚点
-./wb-account-sync.sh backup --slim --label before-live-sync
-
-# 2. 先演练，看清会改什么
-./wb-account-sync.sh sync --dry-run
-
-# 3. 开启持续同步（会先跑首轮同步，再装 launchd 常驻服务）
-./wb-account-sync.sh daemon-install
-```
-
-装完 **重启一次 WorkBuddy**，任务列表就会出现全部历史。
-
-## 持续同步
-
-```bash
-./wb-account-sync.sh daemon-install     # 开启（开机自启 + 常驻）
-./wb-account-sync.sh daemon-status      # 状态 / 数据池 / 上次同步
-./wb-account-sync.sh daemon-log -n 50   # 日志
-./wb-account-sync.sh daemon-uninstall   # 关闭（数据池与日志保留）
-```
-
-**三路触发，互不依赖**：
-
-| 时机 | 说明 |
+| 本版支持 | 本版不支持 |
 |---|---|
-| 检测到当前账号变化 | 登录 / 切换账号后约 10 秒内同步（连续 2 次观测确认，避免读到中间态） |
-| 检测到客户端刚退出 | 最干净的窗口，立刻做一轮 |
-| 每 300 秒兜底校准 | 捕捉运行期间新产生的跨账号数据 |
+| 显式选择单一 `--home` | 新旧客户端跨目录搬家、跨设备迁移 |
+| 普通、未删除、非后台自动化会话 | 自动化任务及其运行/投递数据 |
+| 只修改会话所属账号 | 复制正文、附件、工作区文件 |
+| 当前登录快照中的账号作为目标 | 任意猜测账号、自动取消账户隔离 |
+| 校验行指纹和归属 | 保证界面可见、云同步一致、登录授权可用 |
+| 撤销本次记录的归属修改 | 全库备份、完整灾难恢复、自动无损回滚 |
 
-**可调参数**：`daemon-install --interval 5 --reconcile-every 300`
+**运行要求：** Python 3.10+；写操作仅支持 macOS。Linux 用于合成数据测试及只读能力验证。运行零第三方依赖，源码构建需要标准 Python 构建工具。
 
-**与 `adopt` / `restore` 的关键区别**：持续同步**不做任何删除**，只用行级 `UPDATE` 与 upsert，
-配合 `PRAGMA busy_timeout`，因此**可以在 WorkBuddy 运行时使用**。
-`adopt` / `restore` / `revert` 是破坏性操作，仍要求先 ⌘Q 退出客户端。
+这不是“所有 5.5.x 都兼容”：仅检查已列入白名单的会话字段、键结构和 schema 指纹。未知结构、触发器或可能引发级联副作用的键结构会拒绝操作。
 
-## 命令参考
+## 下载安装
 
-| 命令 | 作用 | 关键参数 |
-|---|---|---|
-| `status` | 列出账号与资产统计、数据分层、快照 | — |
-| `sync` | 执行一轮全量同步 | `--to <uid\|current>` `--dry-run` |
-| `live` | 前台常驻进程（调试用） | `--interval` `--settle` `--reconcile-every` `--dry-run` |
-| `daemon-install` | 安装 launchd 后台服务 | `--interval` `--reconcile-every` `--dry-run` `--no-first-sync` |
-| `daemon-uninstall` | 卸载后台服务 | — |
-| `daemon-status` | 查看服务与数据池状态 | — |
-| `daemon-log` | 查看同步日志 | `-n <行数>` |
-| `backup` | 生成全量快照 | `--label` `--slim` `--out` |
-| `snapshots` | 列出快照 | `--out` |
-| `restore` | 从快照恢复 | `--yes` `--prune` `--prune-accounts` `--clean-migrated` `--overwrite-db` `--force` |
-| `adopt` | 把源账号资产过户给目标账号 | `--from <uid\|all>` `--to <uid\|current>` `--yes` `--force` |
-| `revert` | 撤销最近一次 adopt | `--snapshot` `--yes` `--force` |
+### 方法一：下载 wheel（推荐体验）
 
-`<uid>` 支持前缀匹配，例如 `a1b2c3d4` 代表一大串 UUID 里的某个账号。
+从本仓库的 [Releases](https://github.com/Guyungy/wb-account-sync/releases) 选择明确标为 **Pre-release** 的安全预览版本；若尚无发行版，可从 [Actions](https://github.com/Guyungy/wb-account-sync/actions) 成功构建的 `wb-account-sync-safety-preview` 附件下载。Artifacts 有保留期限，下载可能需要 GitHub 登录。
 
-### 一次性同步
+下载 `.whl` 和 `SHA256SUMS.txt`，在下载目录用 `shasum -a 256 文件名.whl` 对照校验和。校验和检测传输损坏，**不是代码签名，也不证明来源未遭篡改**。
 
-```bash
-./wb-account-sync.sh sync --dry-run          # 先看会改什么
-./wb-account-sync.sh sync                    # 同步到当前登录账号
-./wb-account-sync.sh sync --to a1b2c3d4      # 指定目标账号
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python3 -m pip install --no-index --no-deps ./wb_account_sync-0.2.0a1-py3-none-any.whl
+wb-account-sync --version
+wb-account-sync --help
 ```
 
-> 后台服务在跑时会持有单实例锁，此时手动 `sync` 会被拒绝（服务已在做同样的事）。
-> 需要手动跑请先 `daemon-uninstall`。
+若只下载了 wheel，无需 `--no-deps` 之外的额外依赖；Python/pip 本身仍须已安装。无 `sudo`，无 `curl | bash`，不安装常驻服务，不启动临时应用绕过权限。
 
-### 一次性过户（不装服务）
+### 方法二：从源码安装
 
-```bash
-./wb-account-sync.sh backup --label before-switch
-./wb-account-sync.sh adopt --from all --to current     # 演练，看清变更清单
-# ⌘Q 退出 WorkBuddy → 打开系统终端 → 真正执行
-./wb-account-sync.sh adopt --from all --to current --yes
-./wb-account-sync.sh revert --yes                       # 反悔
+```sh
+git clone --branch product/safe-preview-v0.2 https://github.com/Guyungy/wb-account-sync.git
+cd wb-account-sync
+python3 -m venv .venv
+. .venv/bin/activate
+python3 -m pip install .
+wb-account-sync --version
 ```
 
-## 数据分层：具体位置
+也可在已经安装 `pipx` 的情况下使用 `pipx install .`。**尚未发布 PyPI**，不要假设 `pip install wb-account-sync` 下载的是本项目。
 
-给想自己排查 / 扩展的人：
+三种入口调用相同核心：安装后的 `wb-account-sync`、源码目录内的 `python3 -m wb_account_sync`、`./wb-account-sync.sh`。源码启动器支持 `WB_PYTHON=/绝对路径/python3` 显式指定解释器。
 
-| 资产 | 位置 | 备注 |
-|---|---|---|
-| 任务 / 对话历史 | `~/.workbuddy/workbuddy.db` → `sessions.user_id` | 项目记录在 `sessions.cwd` / `project_id` |
-| 自动化 | 同库 `automations.owner_user_id`（+ `owner_status`） | 待投递在 `automation_delivery_outbox.owner_user_id` |
-| 自动化运行记录 | `automation_runs`（PK `thread_id`）、`automation_runtime_state` | 靠 `automation_id` 间接归属，无需单独处理 |
-| 长期记忆 | `~/.workbuddy/memory/<uid>_memory.md` | 文件尾部有 `RAW_JSON` 块，**`uid` 与 `memoryBlock` 两处都要写** |
-| 连接器授权 | `~/.workbuddy/connectors/<uid>/` | `.master.key` + `.credentials.v3.json` + `connector-states.json` |
-| 账号个人存储 | `~/.workbuddy/storage/user-<uid>[-personal]/` | |
-| 渠道绑定 | `~/.workbuddy/settings.json` → `claw.users.<uid>` | |
-| 当前账号 | `~/.workbuddy/storage/skeleton/account-snapshot.json` → `primary.uid` | 唯一权威来源 |
-| 工作区列表 | 同库 `workspaces(path, last_opened_at)` | 无 uid，设备级 |
-| 云端同步映射 | `~/.workbuddy/edge-sync-mapping-v4.db` | `msg_channel` 形如 `convmsg:<uid>`，说明会话消息按账号上传云端 |
+## 使用流程：检查 → 计划 → 确认 → 核验
 
-`connectors/default/` 和 `connectors/skills/` **不是账号**，不要当成 uid 处理。
-数据库里也**没有 users 表**，账号只能从「数据里出现过的 uid」推导。
+### 0. 独立备份并退出客户端
 
-## 安全设计
+先通过官方导出（若可用）或你自己的备份方案保存数据。**本工具的 undo journal 不是完整备份。**
 
-- **零删除**：同步链路任何一步都不删数据；账号级文件只「有则跳过、缺则补齐」。
-- **限定范围**：数据库 `UPDATE` 强制 `user_id IN (本机已发现的账号)`，不会误抓陌生 uid 的行。
-- **不整库覆盖**：只用行级 `UPDATE`，不 copy 整个 db 文件，客户端运行中也安全。
-- **单实例锁**：`~/.workbuddy-account-sync/.lock`（`fcntl.flock`），避免并发写入。
-- **写前必备份**：`restore` 生成 `pre-restore` 快照，`adopt` 生成 `pre-adopt-<src>-to-<dst>` 快照。
-- **默认演练**：`adopt` 不加 `--yes` 只打印变更清单。
-- **行级 diff 恢复**：`restore` 默认按主键逐行回写，不整库覆盖，保住快照之后的新数据。
-- **不删源数据**：`adopt` 把源目录改名为 `.migrated-*` 中转保留，确认后再手动清理。
-- **主密钥有备份**：整包接过连接器凭据时，原 `.master.key` 另存为 `.master.key.before-sync-<时间戳>`。
+登录目标账号后，按 Command-Q 完全退出 WorkBuddy。保持离线直到执行、核验和必要的撤销结束。旧版如果装过服务，请在系统终端手动停止：
 
-## ⚠️ 风险与免责
-
-1. **这是非官方工具**。它读写 WorkBuddy 客户端的私有本地数据，与腾讯 / WorkBuddy 官方无关，未获其授权或背书。
-2. **客户端升级后可能失效**。本工具依赖内部表结构与目录布局（见上表），WorkBuddy 更新后这些可能变化。使用前先 `backup`。
-3. **所有账号将变成等价身份**。持续同步的本意就是让各账号共享同一份数据，因此**账号间的隔离被取消**：连接器授权、渠道绑定、长期记忆全部互通。不适合把不同账号用于互相隔离的场景。
-4. **仅 macOS**。后台服务用 `launchd` 的 LaunchAgent 实现。
-5. **请在写入前备份**。任何自动化工具都不该在没有回滚点的情况下操作个人数据。
-
-## 常见问题
-
-**同步完了，但任务列表还是空的？**
-客户端对列表有内存缓存。**重启一次 WorkBuddy** 即可看到全部历史。
-
-**装服务后为什么手动 `sync` 被拒绝？**
-单实例锁。后台服务已经在做同样的事，先 `daemon-uninstall` 再手动跑。
-
-**`restore` / `adopt` 报「检测到 WorkBuddy 正在运行」？**
-这两个是破坏性操作，要求先 ⌘Q 完全退出客户端，并用系统终端（Terminal.app / iTerm）运行。
-另外注意：WorkBuddy 的 macOS 主进程可执行文件叫 `Electron`（`/Applications/WorkBuddy.app/Contents/MacOS/Electron`），
-不是 `WorkBuddy`，所以本工具是按「应用包内、非 Frameworks 目录下的可执行文件」识别进程的。
-
-**会不会把云端数据也改了？**
-不会。本工具只动本机 SQLite 与本地文件，客户端的云端同步由它自己负责。
-
-**要彻底关掉？**
-`daemon-uninstall`，然后按需 `restore` 回滚到同步前的快照。
-
-## 回滚
-
-```bash
-./wb-account-sync.sh snapshots                        # 列出快照
-# ⌘Q 退出 WorkBuddy
-./wb-account-sync.sh restore <快照名|latest> --yes
+```sh
+launchctl bootout gui/$(id -u)/com.workbuddy.account-sync
 ```
 
-快照默认落在 `~/.workbuddy-account-snapshots/<时间戳>-<标签>/`：
+命令失败不代表停止成功；请核实服务状态，另外停止自己启动的旧 `live` 进程。不要删除 WAL/锁文件，也不要绕过权限拒绝。
 
+### 1. 检查与计划
+
+以下均为占位变量，请替换成自己的**完整绝对路径和完整 UUID**；不要把操作系统用户主目录当作客户端目录。
+
+```sh
+WB_HOME='<绝对客户端目录，例如你选择的 .workbuddy-ai>'
+STATE_DIR='<客户端之外的独立状态目录；父目录须存在>'
+SOURCE_UUID='<完整源账号UUID>'
+TARGET_UUID='<当前账号快照中的完整目标UUID>'
+
+wb-account-sync doctor --home "$WB_HOME"
+wb-account-sync plan --home "$WB_HOME" --source "$SOURCE_UUID" --target "$TARGET_UUID"
 ```
-manifest.json          快照元信息（时间、账号、清单、slim 标记）
-workbuddy.db           SQLite 一致性副本（backup API，对 WAL 安全）
-accounts/              账号级资产（memory / connectors / storage）
-settings.json
-payload/               会话内容资产（--slim 时无此项）
-adopt-ledger.json      仅 pre-adopt 快照里有
+
+`doctor`、`plan`、`verify` 不写客户端数据和运行状态。没有 `--output` 时，计划只输出到终端。它们不是在线快照：发现非空 WAL、活动 journal 或读取期间变化就拒绝；使用前仍须退出客户端。
+
+需要保存时显式导出到客户端目录外；已存在的文件不会覆盖：
+
+```sh
+wb-account-sync plan --home "$WB_HOME" --source "$SOURCE_UUID" --target "$TARGET_UUID" --output plan.json
 ```
 
-## License
+计划包含路径、UUID、会话 ID 和行指纹，请仅本地审阅，勿上传到 issue/公共仓库。校验和用于检测计划变化，**不是数字签名**。执行器还会核对每行内容和修改范围。
 
-[MIT](LICENSE)
+### 2. 确认执行并核验
+
+确认目录、源/目标、变更行后，复制输出中的完整 `plan_id`；不支持通用 `--yes` 或短前缀。
+
+```sh
+PLAN_ID='<已审阅计划的完整plan_id>'
+wb-account-sync apply --plan plan.json --state-dir "$STATE_DIR" --confirm "$PLAN_ID"
+wb-account-sync verify --plan plan.json
+```
+
+`STATE_DIR` 应为尚不存在的新目录，或属于本工具、权限为 `0700` 的既有目录。不要选择普通个人文件夹、旧同步池或其他客户端目录。计划与 journal 文件以 `0600` 创建。
+
+计划冻结数据库路径/inode、schema、账号快照和行指纹；漂移即拒绝。写前持久化 undo 元数据；普通会话归属更新在同一事务中完成，不对其他表执行 SQL。程序不能阻止用户在执行中重新启动客户端，请保持退出状态。
+
+### 3. 必要时撤销
+
+```sh
+wb-account-sync restore --run-dir "$STATE_DIR/runs/$PLAN_ID" --confirm "$PLAN_ID"
+```
+
+只恢复记录中的 `user_id`。受影响行有后续内容修改、账号快照变化或数据库被替换时，拒绝覆盖。重复执行成功的 apply/restore 是幂等的；已经撤销的 run 不允许再次 apply。
+
+提交后状态记录失败会留下 `prepared` 与已提交数据，可通过相同计划重试确认结果；混合状态需要人工审阅。不要删除运行目录强行重来。
+
+## 命令与返回值
+
+```text
+doctor --home PATH [--json]
+status --home PATH [--json]                 # doctor 的别名
+plan --home PATH --source UUID --target UUID [--output FILE] [--json]
+apply --plan FILE --state-dir PATH --confirm PLAN_ID [--json]
+verify --plan FILE [--json]
+restore --run-dir PATH --confirm PLAN_ID [--json]
+--version
+```
+
+输出为 JSON；`--json` 额外将受控错误输出为 JSON。退出码：`0` 成功；`2` 参数/安全拒绝或操作失败；`3` verify 检查完成但尚未达到目标状态。成功核验**仅指本地行归属**，不代表正文/附件/界面/云端已经全部同步。
+
+## 测试与发布
+
+```sh
+python3 -m unittest discover -s tests -v
+python3 -m pip install build
+python3 -m build
+```
+
+测试使用临时目录与合成会话，写操作中的进程检查以 mock 测试，不对真实账号操作。覆盖只读零副作用、计划漂移、权限拒绝、多行失败回滚、journal 中断续办、重复执行、保守撤销等；mock 通过不代表真实客户端兼容认证。
+
+CI 配置 macOS/Linux × Python 3.10/3.13，成功后构建 wheel、源码包和 SHA-256 清单，并在新虚拟环境进行安装冒烟检查。请以每次提交的实际 CI 结果为准。
+
+## 从预览到产品
+
+**已实现：** 可安装 CLI、安全计划/确认流程、事务执行、持久 undo journal、保守恢复、合成故障测试、CI 构建。
+
+**尚未实现：** 完整跨账号/跨目录迁移、自动化官方接口集成、完整备份、签名公证的 macOS 图形界面、PyPI、自动更新、真实客户端兼容矩阵和长期灰度验收。
+
+路线：P0 安全预览 → P1 恢复与故障验收 → P2 可支持的 CLI Beta → P3 签名桌面产品 → 达到明确门槛后发布 1.0。不会用“已跑通一次”替代生产质量证明。
+
+- [长期产品路线图与 1.0 验收](docs/ROADMAP.md)
+- [安全边界及故障处理](docs/SAFETY.md)
+- [从旧版迁移](docs/MIGRATION.md)
+- [更新记录](CHANGELOG.md)
+- [MIT 许可证](LICENSE)
