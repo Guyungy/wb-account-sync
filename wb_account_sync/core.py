@@ -120,6 +120,7 @@ def doctor(home):
                            "GROUP BY user_id ORDER BY user_id").fetchall()
     return {"version": __version__, "home": ident["home"], "current_account": uid,
             "scope": SCOPE, "schema": fingerprint,
+            "automatic_account_sync": False, "user_settings_sync": False,
             "ordinary_session_counts": [dict(r) for r in rows], "excluded": EXCLUDED,
             "note": "Read-only inspection, not an endorsement of client/cloud compatibility."}
 
@@ -220,7 +221,10 @@ def verify(plan):
         current = phase(con, plan)
     return {"plan_id": plan["plan_id"], "phase": current,
             "verified": current in ("after", "empty"), "sessions": len(plan["changes"]),
-            "scope": SCOPE, "note": "Ownership rows only; UI, cloud and attachments are not verified."}
+            "no_op": current == "empty",
+            "scope": SCOPE, "note": ("Empty plan: no history was migrated or synchronized."
+                                     if current == "empty" else
+                                     "Ownership rows only; UI, cloud and attachments are not verified.")}
 
 
 def journal_write(path, plan, status):

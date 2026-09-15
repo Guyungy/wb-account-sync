@@ -28,6 +28,17 @@ def parser():
     cmd.add_argument("--target", required=True)
     cmd.add_argument("--output")
     cmd.add_argument("--json", action="store_true")
+    cmd = sub.add_parser("share-preview", help="Read-only history union; preserves every original owner; NOT executable")
+    cmd.add_argument("--home", required=True)
+    cmd.add_argument("--accounts", nargs="+", required=True, help="Explicit participating UUIDs, including target")
+    cmd.add_argument("--target", required=True)
+    cmd.add_argument("--json", action="store_true")
+    cmd = sub.add_parser("preferences-preview", help="Read-only allowlisted settings diff; no values or credentials exported")
+    cmd.add_argument("--source-file", required=True)
+    cmd.add_argument("--target-file", required=True)
+    cmd.add_argument("--json", action="store_true")
+    cmd = sub.add_parser("demo", help="Run a fixed synthetic preview rehearsal; never opens your client data")
+    cmd.add_argument("--json", action="store_true")
     cmd = sub.add_parser("apply", help="Apply a reviewed plan while client and old daemon are stopped")
     cmd.add_argument("--plan", required=True)
     cmd.add_argument("--state-dir", required=True)
@@ -62,6 +73,15 @@ def main(argv=None):
                 if output == home or home in output.parents:
                     raise SafetyError("Export the plan outside the client data directory.")
                 atomic_json(output, result, exclusive=True)
+        elif args.command == "share-preview":
+            from .preview import history_preview
+            result = history_preview(args.home, args.accounts, args.target)
+        elif args.command == "preferences-preview":
+            from .preview import preferences_preview
+            result = preferences_preview(args.source_file, args.target_file)
+        elif args.command == "demo":
+            from .rehearsal import run
+            result = run()
         elif args.command == "apply":
             result = core.apply(core.load_plan(args.plan), args.state_dir, args.confirm)
         elif args.command == "verify":

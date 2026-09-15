@@ -65,6 +65,23 @@ wb-account-sync --version
 
 三种入口调用相同核心：安装后的 `wb-account-sync`、源码目录内的 `python3 -m wb_account_sync`、`./wb-account-sync.sh`。源码启动器支持 `WB_PYTHON=/绝对路径/python3` 显式指定解释器。
 
+## 先安全体验：不接触真实账号
+
+工作区新增三个**尚未发布的只读入口**。它们不等于客户端同步已完成：
+
+```sh
+python3 -m wb_account_sync demo --json
+```
+
+`demo` 自动构造三个虚拟账号，检查历史并集预览、原始归属不变、偏好冲突保留目标、敏感字段不输出等十个断言。只使用新建的临时夹具；不读取真实 home，不启动客户端，不提供绕过离线检查的开关。可以在 WorkBuddy 运行时执行。
+
+- `share-preview --home PATH --accounts UUID_A UUID_B --target UUID_B`：只读显示**显式参与账号**的普通历史并集及排除数量；不改 `user_id`，输出不能传给 `apply`。真实目录须先退出客户端；不会自动扫描其他账号。
+- `preferences-preview --source-file FILE --target-file FILE`：仅读取明确选定的两个 JSON 设置文件，对已知语言、模型、输出风格等白名单字段给出差异动作，不输出字段值。只建议补缺，冲突保留目标；不会写回、复制密钥或启用规则/技能/连接器。
+
+**当前仍未实现：切换账号后客户端展示全部历史、账号偏好写回、规则/技能和非敏感连接器配置同步。** `share-preview` 是检查入口，不是共享实现。`demo` 通过也不是客户端、正文/附件或灾难恢复验收通过。原有 `apply` 会迁走会话归属，不能用于“所有账号都保留”的需求。
+
+同一 home 的全局设置/本地技能与账号作用域设置必须分开处理。账号作用域还涉及企业维度和 `global/` 子层；不能递归合并整个 `storage/user-*`，也不能把云记忆缓存当作权威设置。只有已核验的字段才可进入后续写回方案。
+
 ## 使用流程：检查 → 计划 → 确认 → 核验
 
 ### 0. 独立备份并退出客户端
@@ -132,6 +149,9 @@ wb-account-sync restore --run-dir "$STATE_DIR/runs/$PLAN_ID" --confirm "$PLAN_ID
 ```text
 doctor --home PATH [--json]
 status --home PATH [--json]                 # doctor 的别名
+demo [--json]                              # 仅虚拟夹具，不读取真实账号
+share-preview --home PATH --accounts UUID UUID ... --target UUID [--json]
+preferences-preview --source-file FILE --target-file FILE [--json]
 plan --home PATH --source UUID --target UUID [--output FILE] [--json]
 apply --plan FILE --state-dir PATH --confirm PLAN_ID [--json]
 verify --plan FILE [--json]

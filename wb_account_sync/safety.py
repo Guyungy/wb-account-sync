@@ -42,7 +42,7 @@ def valid_uid(value):
 
 
 def read_json(path):
-    path = Path(path)
+    path = require_plain_path(path)
     if path.is_symlink() or not path.is_file() or path.stat().st_size > 32 * 1024 * 1024:
         raise SafetyError("Expected a regular JSON file smaller than 32 MiB.")
     try:
@@ -52,12 +52,20 @@ def read_json(path):
 
 
 def require_plain_path(path):
-    path = Path(path).expanduser().absolute()
+    path = Path(path).expanduser()
+    # absolute() preserves '..', which can defeat lexical containment checks.
+    # Reject traversal before touching the filesystem, rather than normalizing
+    # through a possibly symlinked or nonexistent parent.
+    if ".." in path.parts:
+        raise SafetyError("Parent traversal ('..') is not accepted; use a canonical path.")
+    path = path.absolute()
     for component in (path, *path.parents):
         if component.is_symlink():
             # macOS /tmp and /var are system aliases: callers should resolve them first.
             raise SafetyError("Symlink paths are not accepted; use an explicit canonical path.")
-    return path
+    # Normalize equivalent lexical roots (notably // on POSIX) only AFTER
+    # rejecting traversal and symlinks, so containment uses one representation.
+    return path.resolve(strict=False)
 
 
 def identity(home):

@@ -17,6 +17,28 @@ This unofficial tool depends on private client storage; client/cloud effects are
   Target must equal the selected home's account-snapshot current `primary.uid`.
 - Detect supported ordinary-session base fields and schema fingerprints only; not all-5.5.x compatibility.
 
+## Read-only sharing and preference previews (unreleased)
+
+- `demo` accepts no home/path override, constructs only temporary synthetic data, and
+  exercises ten preview assertions. It does not bypass the process guard, use the
+  migration writer, or prove real-client apply/restore, UI or cloud compatibility.
+- `share-preview` only inventories explicitly chosen UUIDs and keeps original ownership.
+  Its output is not an executable migration plan; `can_apply` and
+  `client_sync_implemented` must remain false. UUID selection does not prove authority.
+- Sharing output includes paths, account/session identifiers and row fingerprints.
+  It is not anonymous; keep it local. No message bodies or attachments are opened.
+- `preferences-preview` reads only the two explicitly selected JSON files. Known
+  preference keys produce actions, not values or value hashes. Unknown key names
+  and values are not exported. It does not infer account-scoped file layouts.
+- General settings may coexist with secrets or executable configuration in the same
+  JSON file. Never recursively copy it: hooks, env, permissions, authorization,
+  payment bindings, channels, rules/skill activation and connector state are excluded.
+- The preview does not write settings, synchronize skills/rules, or enable connectors.
+  Same-home shared device settings do not require cross-account copies.
+- Path validation rejects `..` and symlink components before canonicalization and
+  containment checks. This is not a guarantee against malicious concurrent filesystem
+  replacement; use trusted directories and keep the client stopped for real-data reads.
+
 ## Offline and database gates
 
 Quit the client and stop the old daemon before `doctor`, `plan`, or `verify` reads real data.
