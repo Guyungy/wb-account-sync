@@ -172,6 +172,36 @@ $P tools/wb_home_bridge.py verify --plan $S/plan.json
 $P tools/wb_home_bridge.py restore --run-dir $S/runs/<plan_id> --confirm <plan_id>
 ```
 
+### 自动同步（无人值守）
+
+如果你不想每次手动开界面、粘 `plan_id`，可以装一个 **macOS launchd 代理**：
+
+```sh
+python3 tools/wb_autosync.py install
+```
+
+- 每 120 秒（可 `--interval N` 调整）检查一次。
+- 只有确认 **WorkBuddy 与 WorkBuddy AI 都已退出** 才会真正动手。
+- 执行前用 sqlite 在线备份 API 复制两个 `workbuddy.db`；执行后写入 undo journal。
+- 浏览器界面的「自动同步」卡片会显示最近一次结果、会话数、回滚命令。
+
+管理模式：
+
+```sh
+python3 tools/wb_autosync.py status     # 查看最近一次运行结果
+python3 tools/wb_autosync.py pause      # 暂停（仍保留代理，只是跳过）
+python3 tools/wb_autosync.py resume     # 恢复
+python3 tools/wb_autosync.py run-now    # 立刻触发一次
+python3 tools/wb_autosync.py uninstall  # 卸载代理（日志/运行记录保留）
+```
+
+**它不是常驻进程**：plist 用 `StartInterval`，不是 `KeepAlive`，所以没有在后台一直占 CPU；
+每次唤起只做一次快速检查，无变化就立即退出。Windows / Linux 没有 install 子命令，
+可直接用系统调度器定时调用 `python3 tools/wb_autosync.py run`。
+
+**重要**：自动同步会免去 `plan_id` 的人工确认。漂移拒绝、数据库备份、undo journal 仍然生效；
+但对写入非常谨慎的用户建议保持 `pause`，只在需要时手动点界面里的「执行」。
+
 ### 选项
 
 | 选项 | 作用 |
@@ -200,6 +230,13 @@ python3 tools/synth_check.py
 用**真实 schema** 造两个假 home，端到端跑 survey/plan/apply/verify/restore，
 覆盖 25 项断言：双向归属重映射、正文与资产到位、记忆并集与 uid 改写、技能/blobs 并集、
 连接器主密钥不被覆盖、幂等、漂移拒绝、回滚。不接触真实账号。
+
+```sh
+python3 tools/autosync_check.py
+```
+
+验证自动同步这一层：客户端运行跳过、变化检测、幂等、备份、暂停、并发锁、清理、plist 生成。
+不接触真实账号。
 
 ## 跨平台说明
 

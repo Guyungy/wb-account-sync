@@ -2,7 +2,7 @@ name: Safety preview CI
 
 on:
   push:
-    branches: [main, 'product/**']
+    branches: [main]
     tags: ['v*']
   pull_request:
   workflow_dispatch:

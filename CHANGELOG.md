@@ -1,5 +1,22 @@
 # 更新记录
 
+## 未发布 — 自动同步（机会式 launchd 代理）
+
+- 新增 `tools/wb_autosync.py`：跨 App 双 home 的**机会式自动同步**。
+  - 只支持 macOS 的 `install` / `uninstall` / `status` / `pause` / `resume` / `run-now`
+    子命令；核心 `run` 子命令跨平台，Windows / Linux 可用系统调度器调用。
+  - 每 120 秒（可 `--interval`）检查一次；两个客户端都退出时才执行，否则只扫一次
+    `ps` 就退出，不碰数据。
+  - 首次运行、或检测到会话/技能/记忆变化、或距上次完整扫描超过 24 小时 →
+    走完整「生成计划 → 漂移校验 → 执行 → 核验」流程。
+  - 免去 `plan_id` 人工确认，但保留：漂移拒绝、两个 `workbuddy.db` 的 sqlite 在线备份、
+    undo journal、一键回滚命令、最近 `--keep` 次运行记录保留。
+  - 状态摘要（会话 id 集合、技能名单、记忆文件）用于无变化跳过，避免空转。
+- 新增 `tools/autosync_check.py`：10 项合成夹具端到端断言，不碰真实账号。
+- `tools/wb_ui.py`：界面新增「自动同步」卡片，显示是否安装/暂停、最近一次结果、
+  会话数、回滚命令。
+- 更新 `docs/HOME_BRIDGE.md`、`README.md`、界面截图 `docs/images/ui.png`。
+
 ## 未发布 — 许可证变更为 GPL-3.0-or-later
 
 - **许可证从 MIT 改为 GNU GPL v3.0 或更新版本**（`GPL-3.0-or-later`）。

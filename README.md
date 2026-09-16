@@ -58,9 +58,10 @@ macOS 用户也可以直接双击 [`tools/ui.command`](tools/ui.command)，把�
 |---|---|---|
 | 同一客户端内改账号归属 | ✅ | 把旧账号下的普通会话过户给当前登录账号 |
 | 两个独立客户端互相打通 | ✅ | WorkBuddy ↔ WorkBuddy AI，双向合并，两边都保留 |
+| **自动同步（无人值守）** | ✅ | launchd 代理每 2 分钟检查一次，两个 App 都退出时自动写入 |
 | 只新增、不覆盖 | ✅ | 冲突时保留目标侧，源侧不删除 |
-| 迁移计划 + 人工确认 | ✅ | 先生成计划，再粘贴完整 `plan_id` 才执行 |
-| 撤销 / 回滚 | ✅ | 基于 undo journal 恢复 `user_id` |
+| 迁移计划 + 人工确认 | ✅ | 浏览器/命令行里必须粘贴完整 `plan_id` |
+| 撤销 / 回滚 | ✅ | 基于 undo journal 恢复 `user_id`；自动同步状态页也会给出回滚命令 |
 | 跨设备迁移 / 云端同步 | ❌ | 不在本工具范围内 |
 
 ---
@@ -71,7 +72,9 @@ macOS 用户也可以直接双击 [`tools/ui.command`](tools/ui.command)，把�
 
 - **客户端退出保护**：写操作前必须完全退出 WorkBuddy 与 WorkBuddy AI。
 - **漂移拒绝**：执行前会再次核对数据库 fingerprint，源数据变了直接拒绝。
-- **完整确认**：不支持 `--yes`，必须人工粘贴 `plan_id`。
+- **完整确认（手动模式）**：不支持 `--yes`，必须人工粘贴 `plan_id`。
+- **自动同步模式**：可选 launchd 代理；两个 App 都退出时才写入，写入前仍然先备份数据库，
+  并保留 undo journal 与回滚命令。该模式会免去 `plan_id` 的人工确认，请按需启用。
 - **不搬敏感项**：连接器凭据用各 home 的 `.master.key` 加密，跨 home 解不开，因此默认不搬；自动化任务默认不搬（避免两边各跑一遍）。
 - **本地运行**：服务只监听 `127.0.0.1`，所有 API 都校验一次性 token。
 
@@ -109,6 +112,32 @@ wb-account-sync plan   --home ~/.workbuddy --source <旧账号UUID> --target <�
 wb-account-sync apply  --plan plan.json --state-dir ./state --confirm <plan_id>
 ```
 
+### 自动同步（无人值守）
+
+不想每次手动点「执行」？装一个 macOS launchd 代理，让它在**两个客户端都退出时自动同步**：
+
+```bash
+python3 tools/wb_autosync.py install --interval 120   # 默认每 120 秒检查一次
+```
+
+- 两个 App 都在运行时，代理**只查一次 `ps` 就退出**，不碰任何数据。
+- 只有当它确认两个 App 都退出了，才会走「备份 → 生成计划 → 漂移校验 → 执行 → 核验」的完整流程。
+- 免去的是「粘 plan_id、开终端」这些动作；安全机制（漂移拒绝、数据库备份、undo journal）一个没少。
+- 浏览器界面会实时显示最近一次同步结果、会话数、回滚命令。
+
+常用管理：
+
+```bash
+python3 tools/wb_autosync.py status     # 查看状态
+python3 tools/wb_autosync.py pause      # 暂停
+python3 tools/wb_autosync.py resume     # 恢复
+python3 tools/wb_autosync.py run-now    # 立刻触发一次
+python3 tools/wb_autosync.py uninstall  # 卸载（保留日志与历史运行记录）
+```
+
+> ⚠️ 自动同步会免去 `plan_id` 的人工确认。如果你对写入非常谨慎，建议只装、不执行，
+> 用 `pause` 把它当「暂停的守护进程」，自己手动点界面里的「执行」。
+
 详细用法见 [`docs/HOME_BRIDGE.md`](docs/HOME_BRIDGE.md) 与 [`docs/SAFETY.md`](docs/SAFETY.md)。
 
 ---
@@ -144,17 +173,19 @@ python3 -m pip install .
 
 ```bash
 python3 -m unittest discover -s tests -v
-python3 tools/synth_check.py
+python3 tools/synth_check.py      # 跨 App 桥端到端（25 项）
+python3 tools/autosync_check.py   # 自动同步层端到端（10 项）
 ```
 
 - 单元测试：125 项，覆盖只读零副作用、计划漂移、权限拒绝、journal 中断续办、幂等、撤销等。
-- 合成夹具测试：25 项端到端断言，用真实 schema 造两个假 home，验证 survey / plan / apply / verify / restore 全链路。
+- `tools/synth_check.py`：25 项端到端断言，用真实 schema 造两个假 home，验证 survey / plan / apply / verify / restore 全链路。
+- `tools/autosync_check.py`：10 项断言，验证自动同步的跳过/变化检测/幂等/备份/暂停/并发锁/清理/plist 生成。
 
 ---
 
 ## 文档
 
-- [`docs/HOME_BRIDGE.md`](docs/HOME_BRIDGE.md) — 跨 App 数据目录打通详细说明
+- [`docs/HOME_BRIDGE.md`](docs/HOME_BRIDGE.md) — 跨 App 数据目录打通与自动同步详细说明
 - [`docs/SAFETY.md`](docs/SAFETY.md) — 安全边界及故障处理
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — 长期路线图与 1.0 验收
 - [`docs/MIGRATION.md`](docs/MIGRATION.md) — 从旧版迁移

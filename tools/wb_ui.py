@@ -44,6 +44,8 @@ import wb_platform  # noqa: E402
 
 VERSION = "0.1.0"
 DEFAULT_STATE_DIR = "~/.wb-home-bridge"
+# 自动同步代理的状态根默认与界面状态目录一致，但可用 WB_AUTOSYNC_ROOT 单独指向
+DEFAULT_AUTOSYNC_ROOT = "~/.wb-home-bridge"
 
 
 # --------------------------------------------------------------------------
@@ -61,6 +63,10 @@ class UiState:
         self.home_a = home_a
         self.home_b = home_b
         self.state_dir = os.path.abspath(os.path.expanduser(state_dir))
+        # 自动同步有自己独立的状态根（launchd 代理在跑），与界面的 --state-dir 无关
+        self.autosync_root = os.path.abspath(os.path.expanduser(
+            os.environ.get("WB_AUTOSYNC_ROOT") or DEFAULT_AUTOSYNC_ROOT
+        ))
         self.plan_path: str | None = None
         self.plan_id: str | None = None
         self.plan_doc: dict[str, Any] | None = None
@@ -69,6 +75,31 @@ class UiState:
 
     def home_for(self, key: str) -> bridge.Home:
         return self.home_a if key == "wb" else self.home_b
+
+
+def autosync_status(root: str) -> dict[str, Any]:
+    """只读读取自动同步代理的状态，供界面展示。
+
+    不复用界面自己的 --state-dir —— 代理是独立进程，它有自己的状态根。
+    """
+    try:
+        import wb_autosync as asy
+    except Exception as exc:  # 模块缺失或导入失败都不该拖垮界面
+        return {"available": False, "error": str(exc)}
+    ns = argparse.Namespace(state_root=root)
+    try:
+        saved = asy.read_status(ns)
+        return {
+            "available": True,
+            "installed": os.path.exists(asy.plist_target()),
+            "paused": os.path.exists(asy.paused_path(ns)),
+            "state_root": root,
+            "log": asy.log_path(ns),
+            "plist": asy.plist_target(),
+            "status": saved,
+        }
+    except Exception as exc:
+        return {"available": False, "error": str(exc)}
 
 
 # --------------------------------------------------------------------------
@@ -234,6 +265,7 @@ class Handler(BaseHTTPRequestHandler):
             "all_stopped": not running,
             "has_plan": st.plan_path is not None,
             "last_run_code": st.last_run_code,
+            "autosync": autosync_status(st.autosync_root),
         }
 
     def _api_survey(self) -> None:
@@ -537,6 +569,11 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   </div>
 
   <div class="card">
+    <h2>自动同步</h2>
+    <div id="autosync" class="hint">正在读取自动同步状态…</div>
+  </div>
+
+  <div class="card">
     <h2>1 · 盘点</h2>
     <div id="survey" class="hint">点击下方按钮读取两个数据目录的现状（只读操作）。</div>
     <div class="actions"><button id="btn-survey">读取盘点</button></div>
@@ -706,9 +743,56 @@ async function refreshState() {
     gate.className = 'gate bad';
     gate.textContent = s.running_names.join('、') + ' 仍在运行。写操作会被拒绝，请先完全退出。';
   }
+  renderAutosync(s.autosync);
   updateRunGate();
   $('btn-apply').disabled = !s.all_stopped || !s.has_plan;
   $('btn-backup').disabled = !s.all_stopped;
+}
+
+const AUTOSYNC_LABELS = {
+  ok: ['ok', '同步成功'],
+  no_change: ['ok', '检查过，无变化'],
+  skipped_running: ['warn', '客户端仍在运行，已跳过'],
+  paused: ['warn', '已暂停'],
+  dry_run: ['warn', '演练模式（未写入）'],
+  plan_failed: ['bad', '生成计划失败'],
+  backup_failed: ['bad', '备份失败'],
+  apply_failed: ['bad', '执行失败'],
+  verify_failed: ['bad', '核验未通过'],
+  error: ['bad', '出错'],
+  unknown: ['warn', '状态未知'],
+};
+
+function renderAutosync(a) {
+  const el = $('autosync');
+  if (!a || !a.available) {
+    el.innerHTML = '自动同步模块不可用。';
+    return;
+  }
+  if (!a.installed) {
+    el.innerHTML = '<div class="gate warn">自动同步代理未安装。'
+      + '安装后两个客户端一旦都退出就会自动同步，无需手动执行。</div>'
+      + '<p class="hint">安装：<code>python3 tools/wb_autosync.py install</code></p>';
+    return;
+  }
+  const st = a.status || {};
+  const [tone, label] = AUTOSYNC_LABELS[st.last_result] || ['warn', st.last_result || '还没有运行记录'];
+  const bits = [];
+  if (st.last_sessions !== undefined && st.last_sessions !== null) {
+    bits.push(`会话 ${st.last_sessions} 条`);
+  }
+  if (st.last_human) bits.push(st.last_human);
+  if (st.last_duration_s) bits.push(`${st.last_duration_s} 秒`);
+  el.innerHTML = `
+    <div class="gate ${a.paused ? 'warn' : 'ok'}">
+      ${a.paused ? '自动同步已暂停' : '自动同步已开启'}
+      &nbsp;·&nbsp; 最近一次：<b>${label}</b>
+      ${st.updated_at ? `（${st.updated_at.replace('T', ' ').slice(0, 19)}）` : ''}
+      ${bits.length ? `&nbsp;·&nbsp; ${bits.join(' · ')}` : ''}
+    </div>
+    ${st.last_note ? `<p class="hint">备注：${st.last_note}</p>` : ''}
+    <p class="hint">每 120 秒检查一次，两个客户端都退出时才写入；写入前自动备份数据库，
+    可在状态目录里回滚。状态根：<code>${a.state_root}</code></p>`;
 }
 
 function updateRunGate() {
