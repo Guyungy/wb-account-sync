@@ -1037,10 +1037,17 @@ setInterval(refreshState, 2000);
 
 
 def pick_port(preferred: int) -> int:
+    """挑一个可用的 127.0.0.1 端口；``preferred`` 为 0 时交给内核分配。
+
+    注意 ``bind(("127.0.0.1", 0))`` 一定会成功——0 的含义是"随便给一个"，
+    所以必须回读 ``getsockname()`` 才能拿到真实端口。直接 return 传进来的
+    0 会拼出 ``http://127.0.0.1:0/`` 这种无效地址，浏览器打不开，
+    用户看到的就是"双击没反应"。
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         try:
             sock.bind(("127.0.0.1", preferred))
-            return preferred
+            return sock.getsockname()[1]
         except OSError:
             pass
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -1057,6 +1064,21 @@ def build_state(args: argparse.Namespace) -> UiState:
     )
 
 
+def _spawn(argv: list[str], timeout: float = 10.0) -> bool:
+    """跑一条外部命令，只看它成不成功。超时或命令不存在都算失败。
+
+    输出一律丢弃：打包版没有终端，子进程的噪声不该混进原生错误弹窗。
+    """
+    import subprocess
+
+    try:
+        done = subprocess.run(argv, check=False, timeout=timeout,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        return False
+    return done.returncode == 0
+
+
 def open_browser(url: str) -> bool:
     """打开默认浏览器，``webbrowser`` 不灵时用系统原生命令兜底。
 
@@ -1064,21 +1086,24 @@ def open_browser(url: str) -> bool:
     （环境变量被裁掉、没有注册的 handler），返回 ``False`` 而不是抛异常。
     这时退回到系统命令，否则用户双击后的现象就是"没反应"。
     """
+    # macOS 优先走 /usr/bin/open：它直接经 LaunchServices 拉起默认浏览器，
+    # 而 webbrowser 在 mac 上是 MacOSXOSAScript，要靠 AppleEvent 隔空指挥，
+    # 打包成 .app 后实测会 `execution error: AppleEvent 已超时 (-1712)`。
+    if sys.platform == "darwin":
+        if _spawn(["/usr/bin/open", url]):
+            return True
+
     try:
         if webbrowser.open(url):
             return True
     except Exception:
         pass
 
-    import subprocess
-
     try:
-        if sys.platform == "darwin":
-            return subprocess.run(["open", url], check=False).returncode == 0
         if sys.platform.startswith("win"):
             os.startfile(url)  # type: ignore[attr-defined]
             return True
-        return subprocess.run(["xdg-open", url], check=False).returncode == 0
+        return _spawn(["xdg-open", url])
     except Exception:
         return False
 

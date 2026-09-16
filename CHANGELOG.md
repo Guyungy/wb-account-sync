@@ -28,11 +28,17 @@
     而不是"模块不可用"；非 macOS 下不再 import `wb_autosync`（内含 launchctl / osascript）。
   - 新增 `IS_FROZEN`：打包版没有 `tools/` 目录，自动同步的安装指引改为说明文案，
     不再给出跑不通的命令。
-  - 新增 `open_browser()`：`webbrowser.open` 在打包环境里可能只是返回 `False`
-    （环境变量被裁、没有注册 handler），此时退回系统命令
-    （macOS `open` / Windows `os.startfile` / Linux `xdg-open`）。
-- 新增 `docs/DESKTOP_APP.md`：下载方式、首次放行（Gatekeeper / SmartScreen）、
-  平台功能对照、自行构建与已知限制。
+  - **修复 `pick_port(0)`**：`bind(("127.0.0.1", 0))` 一定会成功（0 的含义就是
+    "随便给一个"），而函数此前直接返回传进来的 0，于是自动挑端口时打印出来、
+    并交给浏览器的地址是 `http://127.0.0.1:0/`——一个打不开的地址，
+    用户看到的现象正是"双击没反应"。现在统一回读 `getsockname()` 取内核真正
+    分配的端口。
+  - **修复浏览器打开**：新增 `open_browser()` / `_spawn()`。macOS 优先用
+    `/usr/bin/open`（直接经 LaunchServices），因为 `webbrowser` 在 mac 上走的是
+    osascript AppleEvent，打包后实测失败：`execution error: AppleEvent已超时 (-1712)`。
+    其余平台退回 `webbrowser`，再不行用 `os.startfile` / `xdg-open`。
+  - 新增 `docs/DESKTOP_APP.md`：下载方式、首次放行（Gatekeeper / SmartScreen）、
+    平台功能对照、自行构建与已知限制。
 - **Windows 侧仍未在真机验证**：数据目录候选（`%APPDATA%\WorkBuddy` 等）与
   客户端进程名（`WorkBuddy.exe`）都是推断值。文档已把"先用任务管理器核对进程名"
   列为 Windows 首次使用的前置检查——进程名对不上会导致"客户端在运行却显示已退出"，
