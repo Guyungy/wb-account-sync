@@ -16,14 +16,21 @@ Linux 走 ``/proc`` 按可执行文件名匹配。
 ``~/.workbuddy-ai``。Windows 版的数据目录布局**未经本机验证**（无 Windows 环境），
 候选顺序是推断值；全部候选都找不到时会退回首选路径并标记未确认，由调用方
 提示用户显式指定路径。
+
+**退出客户端为什么要分两段。** ``request_quit`` 只负责把请求发出去，
+``quit_clients`` 再轮询确认进程真的消失。合并成一步会得到一个"我发出去了"
+的返回值，而用户需要的是"确实退干净了"——两者差了整整一个落盘周期。
+强杀必须由调用方显式授权（``allow_force``），默认不发 SIGKILL。
 """
 
 from __future__ import annotations
 
 import os
 import platform as _platform
+import signal
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -117,6 +124,19 @@ def _run(args: list[str]) -> str:
     except OSError as exc:
         raise PlatformError(f"无法执行 {args[0]}：{exc}") from exc
     return _decode(proc.stdout or b"")
+
+
+def _run_check(args: list[str], timeout: float = 10.0) -> bool:
+    """跑一条外部命令，只关心它是否成功返回 0。超时或命令不存在都算失败。"""
+    kwargs: dict[str, Any] = {
+        "check": False, "timeout": timeout, "capture_output": True,
+    }
+    if IS_WIN:
+        kwargs["creationflags"] = CREATE_NO_WINDOW
+    try:
+        return subprocess.run(args, **kwargs).returncode == 0
+    except Exception:
+        return False
 
 
 # --------------------------------------------------------------------------
@@ -263,6 +283,111 @@ def clients_all_stopped() -> bool:
     except PlatformError:
         # 探测本身失败时不假装安全。
         return False
+
+
+# --------------------------------------------------------------------------
+# 退出客户端
+# --------------------------------------------------------------------------
+
+# 优雅退出的宽限期。Electron 客户端退出时要落盘 user-state 并收尾子进程，
+# 秒退会被系统记成一次崩溃，所以给足时间；超时是否强杀由调用方决定。
+QUIT_GRACE_SECONDS = 25.0
+POLL_SECONDS = 0.4
+
+
+def _pids_of(key: str) -> list[int]:
+    return [int(p["pid"]) for p in _scan_processes().get(key, [])]
+
+
+def _signal_pids(pids: list[int], force: bool) -> bool:
+    sig = signal.SIGKILL if force else signal.SIGTERM
+    sent = False
+    for pid in pids:
+        try:
+            os.kill(pid, sig)
+            sent = True
+        except OSError:
+            continue
+    return sent
+
+
+def request_quit(spec: ClientSpec, force: bool = False) -> bool:
+    """向客户端发出退出请求；返回「请求是否成功发出」。
+
+    返回值**不代表进程已消失**——``quit_clients`` 会轮询确认。
+    """
+    if IS_MAC and not force:
+        # 优先走 AppleEvent 优雅退出：客户端才有机会把状态落盘。
+        # osascript 要用不带 .app 后缀的显示名。
+        app = spec.mac_app[:-4] if spec.mac_app.endswith(".app") else spec.mac_app
+        if _run_check(["/usr/bin/osascript", "-e", f'tell application "{app}" to quit']):
+            return True
+        # osascript 失败（自动化权限被拒等）时退回信号，不假装已请求。
+    if IS_WIN:
+        argv = ["taskkill", "/IM", spec.win_image]
+        if force:
+            argv.append("/F")
+        return _run_check(argv)
+    return _signal_pids(_pids_of(spec.key), force)
+
+
+def wait_stopped(timeout: float, poll: float = POLL_SECONDS) -> list[str]:
+    """等待到没有客户端在跑；返回超时后仍在运行的客户端 key 列表。"""
+    deadline = time.monotonic() + max(0.0, timeout)
+    while True:
+        running = [item["key"] for item in running_clients()]
+        if not running:
+            return []
+        if time.monotonic() >= deadline:
+            return running
+        time.sleep(poll)
+
+
+def quit_clients(wait: float = QUIT_GRACE_SECONDS, force_wait: float = 10.0,
+                 allow_force: bool = False) -> dict[str, Any]:
+    """退出所有在跑的客户端，返回 ``{ok, requested, remaining, forced}``。
+
+    ``allow_force`` 为真时才在宽限期后强杀。强杀会让客户端来不及落盘，
+    因此默认关闭，由调用方（界面上的复选框）显式授权。
+    """
+    before = running_clients()
+    if not before:
+        return {"ok": True, "requested": [], "remaining": [], "forced": []}
+
+    requested: list[dict[str, Any]] = []
+    for item in before:
+        spec = CLIENTS_BY_KEY[item["key"]]
+        requested.append({
+            "key": spec.key,
+            "display": spec.display,
+            "signalled": request_quit(spec, force=False),
+        })
+
+    still = wait_stopped(wait)
+    forced: list[str] = []
+    if still:
+        if allow_force:
+            for key in still:
+                if request_quit(CLIENTS_BY_KEY[key], force=True):
+                    forced.append(key)
+            still = wait_stopped(force_wait)
+        else:
+            # 没拿到强杀授权：把请求重发一次（可能是首次被权限弹窗挡住），
+            # 再等一小轮。比直接放弃更贴近「我确实想让它退出」的意图，
+            # 同时不越过强杀这条线。
+            for key in still:
+                request_quit(CLIENTS_BY_KEY[key], force=False)
+            still = wait_stopped(min(5.0, max(1.0, wait / 4)))
+
+    remaining = [
+        {"key": key, "display": CLIENTS_BY_KEY[key].display} for key in (still or [])
+    ]
+    return {
+        "ok": not remaining,
+        "requested": requested,
+        "remaining": remaining,
+        "forced": forced,
+    }
 
 
 def platform_label() -> str:

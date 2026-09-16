@@ -11,7 +11,7 @@ venv/
 # Local artifacts and private operation records
 *.log
 dist/
-dist-new/
+dist-*/
 build/
 outputs/
 .coverage
@@ -20,6 +20,13 @@ plan*.json
 journal.json
 .wb-account-sync-state
 .wb-account-sync-locks/
+
+# Go 构建产物（必须盯着：输出路径写法一变就会漏）
+# 注意：目录形态的忽略规则会连目录里的源码一起吞掉，
+# 所以这里一律写成"具体到可执行文件名"的完整路径，不要用 **/wb-bridge。
+gobridge/wb-bridge
+gobridge/cmd/wb-bridge/wb-bridge
+gobridge/**/*.test
 
 # Project working memory (daily logs / user-specific notes)
 .workbuddy/
