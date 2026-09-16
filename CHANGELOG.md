@@ -1,5 +1,34 @@
 # 更新记录
 
+## 未发布 — 跨 App 数据目录打通（实验）
+
+与主 CLI 互相独立的另一条路径，针对"两个独立客户端各用一个 home"的场景。
+
+- 新增 `tools/wb_home_bridge.py`：跨 home **双向**打通。实测两个客户端
+  （`WorkBuddy.app` / `WorkBuddy AI.app`）home 独立且零共享通道，但两个 SQLite
+  各自独立，同一会话 id 可各存一份 → **两边都保留**可实现（与同一 home 内只能搬走不同）。
+- 定位到会话正文真实位置：`projects/<cwd-slug>/<conversationId>.jsonl`（不在 DB 里）；
+  `sessions.id` == 该文件名（实测 82/84、37/37 命中）。`traces/` 按 workerPid 分桶，
+  跨 App 复制无意义，不搬（省 ~470MB）。
+- 命令：`survey` / `backup` / `plan` / `apply` / `verify` / `restore`。
+- 安全：DB 只 `INSERT OR IGNORE` 缺失主键，文件只新增；完整 `plan_id` 确认；
+  源侧指纹漂移即拒绝；磁盘空间预检；undo journal 可逐行回滚。
+- 自动化默认不搬（否则两个 App 会各跑一遍定时任务）；连接器凭据不搬
+  （各 home 的 `.master.key` 不同，密文跨 home 解不开）。
+- 新增 `tools/bridge-run.sh`（备份 → 计划 → 人工确认 → 执行 → 核验）与
+  `tools/synth_check.py`（合成夹具 25 项端到端断言，不碰真实账号）。
+- 新增 `tools/wb_platform.py`：跨平台抽象层。macOS 用 `ps` 按 bundle 路径匹配 Electron 主进程，
+  Windows 用 `tasklist` 按镜像名匹配，Linux 尽力而为；home 目录自动探测，Windows 候选路径
+  为推断值，不对时允许显式 `--home-a` / `--home-b`。
+- 新增 `tools/wb_ui.py`：本地浏览器界面。服务只绑 `127.0.0.1`，每次启动生成一次性 token；
+  前端可实时看到两个客户端是否已退出、读取盘点、勾选迁移范围、生成并审阅计划、
+  粘贴 plan_id 执行、查看进度、回滚。
+- 新增 `tools/bridge_run.py`：跨平台的「备份 → 计划 → 人工确认 → 执行 → 核验」
+  交互流程，Windows 用户可直接 `python tools\bridge_run.py`。`bridge-run.sh` 改为薄壳，
+  内部调用 `bridge_run.py`。
+- `wb_home_bridge.py` 默认 home 改为按平台自动探测，进程检测与退出指引改用 `wb_platform`。
+- 文档：`docs/HOME_BRIDGE.md`。
+
 ## 未发布 — 共享需求预览与隔离演练
 
 - 新增 `demo`：三个纯虚拟账号的十项只读断言，不访问真实账号，不模拟客户端写回成功。

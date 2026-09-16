@@ -19,3 +19,6 @@ plan*.json
 journal.json
 .wb-account-sync-state
 .wb-account-sync-locks/
+
+# Project working memory (daily logs / user-specific notes)
+.workbuddy/
