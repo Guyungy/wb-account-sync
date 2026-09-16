@@ -11,6 +11,7 @@ venv/
 # Local artifacts and private operation records
 *.log
 dist/
+dist-new/
 build/
 outputs/
 .coverage

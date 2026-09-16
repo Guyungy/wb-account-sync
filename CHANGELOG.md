@@ -37,18 +37,35 @@
     `/usr/bin/open`（直接经 LaunchServices），因为 `webbrowser` 在 mac 上走的是
     osascript AppleEvent，打包后实测失败：`execution error: AppleEvent已超时 (-1712)`。
     其余平台退回 `webbrowser`，再不行用 `os.startfile` / `xdg-open`。
-  - 新增 `docs/DESKTOP_APP.md`：下载方式、首次放行（Gatekeeper / SmartScreen）、
-    平台功能对照、自行构建与已知限制。
   - **自动开浏览器失败时亮出地址**：打包版没有终端，带 token 的地址只打印在
     stdout 里——浏览器一旦没弹出来，用户既看不到界面也拿不到地址，现象和
-    "双击没反应"一模一样。现在新增 `NOTIFY_HOOK` 注入点，`app_main.py` 把
-    原生弹窗（macOS `osascript` / Windows `MessageBoxW`）交给界面层，
-    失败时把完整 URL 摆在用户面前让他自己复制。命令行运行不注入钩子，
-    保持静默（终端里本来就看得见地址）。
+    "双击没反应"一模一样。新增 `NOTIFY_HOOK` 注入点，`app_main.py` 把原生弹窗
+    （macOS `osascript` / Windows `MessageBoxW`）交给界面层，失败时把完整 URL
+    摆在用户面前让他自己复制。命令行运行不注入钩子，保持静默（终端里本来就
+    看得见地址）。
   - **修复 `BrokenPipeError` 被误报成失败**：`--selftest | grep '"ok"'` 这类
-    下游提前关管道的正常用法，此前会走进 `except Exception`，被弹成
-    "自检失败"、退出码变 1——CI 因此误判为构建失败。现在 `--selftest`
-    与界面主流程都单独吞掉 `BrokenPipeError`。
+    下游提前关管道的正常用法，此前会走进 `except Exception`，被弹成"自检失败"、
+    退出码变 1——CI 因此误判为构建失败。现在 `--selftest` 与界面主流程都单独
+    吞掉 `BrokenPipeError`。
+- **界面改为应用自己的窗口**（不再往外跳浏览器）：新增 `--window` 与
+  `open_window()`，用 pywebview 开窗口——macOS WKWebView、Windows WebView2，
+  都是系统自带组件，不用另外装运行时。窗口只能在主线程创建（Cocoa 的硬性
+  要求），所以 HTTP 服务挪到后台线程、主线程阻塞在 `webview.start()`。
+  打包入口默认注入 `--window`，加 `--no-window` 回到浏览器方式。
+  - `open_window()` 靠 `webview.start()` 的回调确认窗口**真的起来了**：
+    某些没有图形会话的环境下 `start()` 会二话不说直接返回，若把它当成
+    "窗口正常关闭"，用户看到的是一闪而过或干脆什么都没有——又绕回
+    "双击没反应"。没确认起来就返回 `False`，退回浏览器并弹窗给地址。
+  - `packaging/wb-account-sync.spec` 用 `collect_all("webview")` 收齐它的 js
+    注入脚本，并按平台显式声明后端（`webview.platforms.cocoa` /
+    `webview.platforms.edgechromium`）——后端是**按平台动态挑**的，
+    静态分析追不到，漏了就和漏打 `wb_ui` 一样：不报错，只是静默退回浏览器。
+  - `--selftest` 新增 `webview` 字段；CI 断言它必须是 `ok`——漏装 pywebview
+    时构建照样能绿，只有这一项拦得住。
+  - CI 的构建依赖从 `pyinstaller` 变成 `pyinstaller pywebview`。
+  - 包体积：macOS 从 20 MB 涨到 **39 MB**（内嵌 pywebview 与 pyobjc）。
+- 新增 `docs/DESKTOP_APP.md`：下载方式、首次放行（Gatekeeper / SmartScreen）、
+  平台功能对照、自行构建与已知限制。
 - **Windows 侧仍未在真机验证**：数据目录候选（`%APPDATA%\WorkBuddy` 等）与
   客户端进程名（`WorkBuddy.exe`）都是推断值。文档已把"先用任务管理器核对进程名"
   列为 Windows 首次使用的前置检查——进程名对不上会导致"客户端在运行却显示已退出"，
