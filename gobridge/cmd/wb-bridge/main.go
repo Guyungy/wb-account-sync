@@ -8,16 +8,22 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"sort"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Guyungy/wb-account-sync/gobridge/internal/bridge"
 	"github.com/Guyungy/wb-account-sync/gobridge/internal/platform"
 	"github.com/Guyungy/wb-account-sync/gobridge/internal/pyjson"
+	"github.com/Guyungy/wb-account-sync/gobridge/internal/webui"
 )
 
 const version = "0.3.0a2-go"
@@ -46,6 +52,8 @@ func run(argv []string) int {
 		return cmdSurvey(argv[1:])
 	case "plan":
 		return cmdPlan(argv[1:])
+	case "serve", "ui":
+		return cmdServe(argv[1:])
 	case "apply":
 		return cmdApply(argv[1:])
 	case "backup":
@@ -71,6 +79,8 @@ func usage() {
   wb-bridge quit-clients  [--json] [--force] [--wait 秒]  退出两个客户端并等进程消失
   wb-bridge survey        [--json] [--home-a 路径] [--home-b 路径]
   wb-bridge plan          [--json] [--output 文件] [--home-a 路径] [--home-b 路径] [选项]
+  wb-bridge serve         [--port 端口] [--no-open] [--token 字符串] [--handshake]
+                          启动本地浏览器界面（只绑 127.0.0.1，必须带 token 访问）
   wb-bridge apply         --plan 文件 --state-dir 目录 --confirm plan_id
   wb-bridge verify        --plan 文件
   wb-bridge backup        --dest 目录 [--label 标签] [--include-heavy]
@@ -106,6 +116,10 @@ type flags struct {
 	includeHeavy bool
 	runDir       string
 	allowRunning bool
+	port         int
+	noOpen       bool
+	token        string
+	handshake    bool
 }
 
 func parseFlags(argv []string) (*flags, error) {
@@ -129,6 +143,26 @@ func parseFlags(argv []string) (*flags, error) {
 			f.allowRunning = true
 		case arg == "--include-heavy":
 			f.includeHeavy = true
+		case arg == "--no-open":
+			f.noOpen = true
+		case arg == "--handshake":
+			f.handshake = true
+		case arg == "--port" || strings.HasPrefix(arg, "--port="):
+			v, err := str()
+			if err != nil {
+				return nil, err
+			}
+			n, cerr := strconv.Atoi(v)
+			if cerr != nil {
+				return nil, fmt.Errorf("--port 需要整数：%v", cerr)
+			}
+			f.port = n
+		case arg == "--token" || strings.HasPrefix(arg, "--token="):
+			v, err := str()
+			if err != nil {
+				return nil, err
+			}
+			f.token = v
 		case arg == "--wait":
 			v, err := next()
 			if err != nil {
@@ -514,6 +548,113 @@ func requireClientsStopped(allowRunning bool) error {
 			strings.Join(names, "、"))
 	}
 	return nil
+}
+
+// defaultStateDir 与 Python 版的 DEFAULT_STATE_DIR 一致。
+const defaultStateDir = "~/.wb-home-bridge"
+
+// newToken 生成 32 字节的 URL 安全随机串。
+//
+// 这个 token 是本地界面的唯一访问闸门：绑的是 127.0.0.1，但同机上的任何
+// 进程/页面都能访问到回环地址，所以随机性与不可预测性是必要的。
+// 用 crypto/rand 而不是 math/rand —— 后者可预测，等于没有闸门。
+func newToken() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func cmdServe(argv []string) int {
+	f, err := parseFlags(argv)
+	if err != nil {
+		return fail(err)
+	}
+	a, b, err := homes(f)
+	if err != nil {
+		return fail(err)
+	}
+	if a.Path == b.Path {
+		return fail(fmt.Errorf("两个 home 不能是同一个目录。"))
+	}
+
+	token := f.token
+	if token == "" {
+		token, err = newToken()
+		if err != nil {
+			return fail(fmt.Errorf("无法生成访问令牌：%v", err))
+		}
+	}
+	stateDir := f.stateDir
+	if stateDir == "" {
+		stateDir = defaultStateDir
+	}
+
+	srv := &webui.Server{
+		HomeA:      a,
+		HomeB:      b,
+		StateDir:   platform.ExpandPath(stateDir),
+		Token:      token,
+		Frozen:     false, // 纯 Go 二进制不需要 Python 脚本，安装器可用
+		NotifyHook: notifyUser,
+	}
+
+	ln, port, err := srv.Listen(f.port)
+	if err != nil {
+		return fail(fmt.Errorf("无法绑定端口：%v", err))
+	}
+	defer ln.Close()
+	url := srv.URL(port)
+
+	fmt.Printf("wb-home-bridge UI %s\n", version)
+	fmt.Printf("  平台     : %s\n", platform.PlatformLabel())
+	fmt.Printf("  左侧目录 : %s\n", a.Path)
+	fmt.Printf("  右侧目录 : %s\n", b.Path)
+	fmt.Printf("  状态目录 : %s\n", srv.StateDir)
+	fmt.Printf("  地址     : %s\n\n", url)
+	fmt.Println("本服务只监听 127.0.0.1，且所有接口都要求上面链接里的 token。")
+	fmt.Println("按 Ctrl-C 停止。执行写操作前必须先完全退出两个客户端。")
+
+	if f.handshake {
+		// 宿主程序读这一行来拿地址：必须是单行 JSON，且在用户可读日志之后。
+		fmt.Println("WBUI_READY " + pyjson.MustMarshal(map[string]any{
+			"port": port, "token": token, "url": url,
+			"home_a": a.Path, "home_b": b.Path,
+		}))
+	}
+	// 有终端时 stdout 是行缓冲，但重定向到文件就不是了；显式刷一次，
+	// 否则用户从日志里拿不到带 token 的地址。
+	os.Stdout.Sync()
+
+	if !f.noOpen {
+		// 稍等一下再开浏览器：立刻开有可能在服务还没进入 accept 循环时
+		// 就发请求，浏览器会看到连接被拒。
+		time.AfterFunc(400*time.Millisecond, func() { srv.OpenAndNotify(url) })
+	}
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+	fmt.Println("\n已停止。")
+	return 0
+}
+
+// notifyUser 是"服务起来了但浏览器没打开"时的兜底提示。
+// 命令行模式下终端本来就有地址，所以只在非交互场景（无 TTY）弹窗打扰。
+func notifyUser(title, message string) {
+	if isTerminal() {
+		return
+	}
+	platform.Notify(title, message)
+}
+
+func isTerminal() bool {
+	info, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
 }
 
 func cmdApply(argv []string) int {

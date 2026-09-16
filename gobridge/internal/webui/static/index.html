@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>跨 App 数据目录打通</title>
+<style>
+:root {
+  --bg: #fafaf8; --panel: #ffffff; --line: #e5e3dd; --text: #22211f;
+  --muted: #6f6d66; --faint: #9a978f; --accent: #534ab7; --accent-soft: #eeedfe;
+  --ok: #1d9e75; --ok-soft: #e1f5ee; --warn: #ba7517; --warn-soft: #faeeda;
+  --bad: #a32d2d; --bad-soft: #fcebeb; --code: #f1efe8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1b1a; --panel: #262523; --line: #3a3936; --text: #f0eee9;
+    --muted: #a9a69e; --faint: #7c7a73; --accent: #afa9ec; --accent-soft: #2f2b52;
+    --ok: #5dcaa5; --ok-soft: #16362c; --warn: #ef9f27; --warn-soft: #3a2d12;
+    --bad: #f09595; --bad-soft: #3d1f1f; --code: #33322f;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.6 -apple-system, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.wrap { max-width: 940px; margin: 0 auto; padding: 32px 20px 72px; }
+h1 { font-size: 20px; font-weight: 500; margin: 0 0 4px; }
+h2 { font-size: 15px; font-weight: 500; margin: 0 0 12px; }
+p.lead { color: var(--muted); margin: 0 0 24px; }
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; padding: 18px 20px; margin-bottom: 16px;
+}
+.row { display: flex; gap: 16px; flex-wrap: wrap; }
+.row > * { flex: 1 1 300px; min-width: 0; }
+.kv { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
+.kv span:first-child { color: var(--muted); }
+.kv span:last-child { text-align: right; word-break: break-all; }
+.host { font-weight: 500; font-size: 15px; margin-bottom: 6px; }
+.path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+        color: var(--muted); word-break: break-all; }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px; border-radius: 999px;
+  padding: 2px 10px; font-size: 12px; font-weight: 500;
+}
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.idle { background: var(--code); color: var(--muted); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.opt { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0;
+       border-bottom: 1px solid var(--line); }
+.opt:last-child { border-bottom: 0; }
+.opt input { margin-top: 4px; accent-color: var(--accent); }
+.opt .name { font-weight: 500; }
+.opt .why { color: var(--muted); font-size: 12.5px; }
+.opt .name.risk { color: var(--warn); }
+button {
+  font: inherit; font-weight: 500; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--text);
+  padding: 9px 18px;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+input[type=text], input[type=password] {
+  font: inherit; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+  padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--text); width: 100%;
+}
+pre {
+  background: var(--code); border-radius: 8px; padding: 12px 14px;
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+  white-space: pre-wrap; word-break: break-word; margin: 0;
+  max-height: 340px; overflow: auto; color: var(--text);
+}
+.code-id {
+  font-family: ui-monospace, Menlo, monospace; font-size: 11.5px;
+  background: var(--accent-soft); color: var(--accent);
+  padding: 8px 10px; border-radius: 8px; word-break: break-all;
+}
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 500; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.hint { color: var(--muted); font-size: 12.5px; margin: 8px 0 0; }
+.gate { padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
+.gate.ok { background: var(--ok-soft); color: var(--ok); }
+.gate.bad { background: var(--bad-soft); color: var(--bad); }
+.gate.warn { background: var(--warn-soft); color: var(--warn); }
+.hidden { display: none; }
+.mono { font-family: ui-monospace, Menlo, monospace; }
+.sep { height: 1px; background: var(--line); margin: 14px 0; }
+.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+button.big { padding: 11px 28px; font-size: 15px; }
+/* 折叠区：默认视图只留一键同步，分步操作收进这里 */
+details.card > summary {
+  cursor: pointer; list-style: none; font-size: 15px; font-weight: 500;
+  display: flex; align-items: center; gap: 8px;
+}
+details.card > summary::-webkit-details-marker { display: none; }
+details.card > summary::before {
+  content: "▸"; color: var(--muted); font-size: 12px; transition: transform .15s;
+}
+details.card[open] > summary::before { content: "▾"; }
+.card.sub { border: 0; border-radius: 0; padding: 0; margin: 0; }
+.card.sub + .card.sub { margin-top: 22px; }
+#quick-progress:empty { display: none; }
+#quick-progress .gate { margin: 8px 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>跨 App 数据目录打通</h1>
+  <p class="lead">把 WorkBuddy 与 WorkBuddy AI 的历史会话、记忆、技能互相补全。只新增，不覆盖已有数据。</p>
+
+  <div class="card">
+    <h2>一键同步</h2>
+    <div id="gate" class="gate warn">正在检查客户端进程…</div>
+    <div class="row" id="clients"></div>
+
+    <div class="sep"></div>
+    <div id="options"></div>
+
+    <div class="sep"></div>
+    <label class="opt">
+      <input type="checkbox" id="quick-quit" checked>
+      <span><span class="name">需要时自动退出两个客户端</span>
+      <span class="why">按顺序做：退出客户端 → 盘点 → 计划 → 备份 → 执行 → 核验。
+      先退出再建计划，指纹才不会因为客户端退出时落盘而漂移。不勾选则要求你自己先退干净。</span></span>
+    </label>
+    <label class="opt">
+      <input type="checkbox" id="quick-force">
+      <span><span class="name risk">25 秒没退干净就强制结束进程</span>
+      <span class="why">客户端来不及落盘，可能丢未保存的状态。默认关闭。</span></span>
+    </label>
+    <label class="opt">
+      <input type="checkbox" id="quick-backup" checked>
+      <span><span class="name">执行前自动备份</span>
+      <span class="why">备份到状态目录，可回滚。空间不足会中止，不会硬写。</span></span>
+    </label>
+
+    <div class="actions">
+      <button id="btn-quick" class="primary big">开始同步</button>
+    </div>
+    <div id="quick-progress"></div>
+    <p class="hint" id="platform"></p>
+  </div>
+
+  <div class="card">
+    <h2>自动同步</h2>
+    <div id="autosync" class="hint">正在读取自动同步状态…</div>
+  </div>
+
+  <div class="card">
+    <h2>执行日志</h2>
+    <pre id="log" style="max-height:420px">等待执行…</pre>
+  </div>
+
+  <details class="card" id="manual">
+    <summary>手动模式（高级）· 分步执行 / 备份 / 核验 / 回滚</summary>
+    <div class="sep"></div>
+
+  <div class="card sub">
+    <h2>1 · 盘点</h2>
+    <div id="survey" class="hint">点击下方按钮读取两个数据目录的现状（只读操作）。</div>
+    <div class="actions"><button id="btn-survey">读取盘点</button></div>
+  </div>
+
+  <div class="card sub">
+    <h2>2 · 迁移范围</h2>
+    <p class="hint">范围就是上面一键同步卡片里勾选的那些选项，改完直接生成计划。</p>
+    <div class="actions">
+      <button id="btn-plan" class="primary">生成计划</button>
+      <span class="hint" id="plan-status"></span>
+    </div>
+  </div>
+
+  <div class="card sub hidden" id="plan-card">
+    <h2>3 · 计划审阅</h2>
+    <div id="plan-summary"></div>
+    <div class="sep"></div>
+    <div class="kv"><span>plan_id</span><span></span></div>
+    <div class="code-id" id="plan-id"></div>
+    <p class="hint">plan_id 只是给你在命令行里复现同一份计划用的，界面里不需要手输，也不要用它做确认。</p>
+    <div class="sep"></div>
+    <div id="plan-detail"></div>
+  </div>
+
+  <div class="card sub hidden" id="run-card">
+    <h2>4 · 执行</h2>
+    <div id="run-gate" class="gate bad">需要先退出两个客户端</div>
+    <div class="actions">
+      <button id="btn-apply" class="danger">执行迁移</button>
+      <button id="btn-backup">先做备份</button>
+      <button id="btn-verify">核验</button>
+    </div>
+    <p class="hint">备份约需数百 MB 空间，默认排除 app / logs / traces 等与迁移无关的大目录。
+    执行与备份的实时输出在上面「执行日志」里。</p>
+  </div>
+
+  <div class="card sub hidden" id="restore-card">
+    <h2>5 · 回滚</h2>
+    <p class="hint">回滚只撤销本工具新建的会话行与文件，不会恢复被合并改写的记忆原文（已留 .before-bridge-* 备份）。</p>
+    <div class="actions">
+      <button id="btn-restore">回滚本次执行</button>
+      <span class="hint" id="restore-status"></span>
+    </div>
+  </div>
+
+  </details>
+</div>
+
+<script>
+const TOKEN = new URLSearchParams(location.search).get('t') || '';
+const $ = (id) => document.getElementById(id);
+
+const OPTIONS = [
+  { key: 'include_changes', label: '会话变更记录', on: true,
+    why: 'changes-detail / changes-index / file-history。缺失会导致变更面板打不开。' },
+  { key: 'include_memory', label: '长期记忆', on: true,
+    why: '合并两边记忆，改写归属到目标账号，改写前留 .before-bridge-* 备份。' },
+  { key: 'include_skills', label: '用户技能目录', on: true,
+    why: '目录并集。同名技能两边各留各的版本，不互相覆盖。' },
+  { key: 'include_claw', label: 'settings.json 渠道绑定', on: true,
+    why: '只合并渠道绑定段，不触碰其他设置项。' },
+  { key: 'include_plugins', label: '插件缓存', on: false,
+    why: 'plugins/cache 体积可能较大，非必需。' },
+  { key: 'include_storage', label: '账号个人存储', on: false,
+    why: '按账号目录改名合并，已存在不覆盖。' },
+  { key: 'include_connectors', label: '连接器开关状态', on: false, risk: true,
+    why: '只并开关状态，凭据无法跨 home 解密，仍需重新授权。' },
+  { key: 'include_automations', label: '自动化任务', on: false, risk: true,
+    why: '复制后两个 App 会各跑一遍，日报类任务会被发两次。落地为暂停状态。' },
+  { key: 'overwrite_assets', label: '覆盖已存在的资产文件', on: false, risk: true,
+    why: '默认跳过已存在文件。开启后会用源文件覆盖目标同名文件。' },
+];
+
+function renderOptions() {
+  $('options').innerHTML = OPTIONS.map((o) => `
+    <label class="opt">
+      <input type="checkbox" data-key="${o.key}" ${o.on ? 'checked' : ''}>
+      <span>
+        <span class="name ${o.risk ? 'risk' : ''}">${o.label}</span>
+        <span class="why">${o.why}</span>
+      </span>
+    </label>`).join('');
+}
+
+function collectOptions() {
+  const out = {};
+  document.querySelectorAll('#options input[type=checkbox]').forEach((el) => {
+    out[el.dataset.key] = el.checked;
+  });
+  return out;
+}
+
+async function api(path, opts) {
+  const sep = path.includes('?') ? '&' : '?';
+  const res = await fetch(path + sep + 't=' + encodeURIComponent(TOKEN), opts);
+  const text = await res.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch (e) { data = { error: text }; }
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+
+async function stream(path, onEvent) {
+  const sep = path.includes('?') ? '&' : '?';
+  const res = await fetch(path + sep + 't=' + encodeURIComponent(TOKEN));
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = 'HTTP ' + res.status;
+    try { msg = JSON.parse(text).error || msg; } catch (e) {}
+    throw new Error(msg);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buffer.indexOf('\n\n')) >= 0) {
+      const chunk = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      const line = chunk.split('\n').find((l) => l.startsWith('data: '));
+      if (line) {
+        try { onEvent(JSON.parse(line.slice(6))); } catch (e) {}
+      }
+    }
+  }
+}
+
+function appendLog(text) {
+  const el = $('log');
+  el.textContent += text;
+  el.scrollTop = el.scrollHeight;
+}
+
+let lastState = null;
+// 一键同步跑起来之后，2 秒一次的 refreshState 不能把按钮重新点亮。
+let quickBusy = false;
+
+async function refreshState() {
+  let s;
+  try { s = await api('/api/state'); } catch (e) {
+    $('gate').className = 'gate bad';
+    $('gate').textContent = '无法读取状态：' + e.message;
+    return;
+  }
+  lastState = s;
+  $('platform').textContent = s.platform + ' · 状态目录 ' + s.state_dir;
+
+  $('clients').innerHTML = s.clients.map((c) => `
+    <div class="card" style="margin:0">
+      <div class="host">${c.display}
+        <span class="pill ${c.running ? 'bad' : 'ok'}" style="margin-left:6px">
+          <span class="dot"></span>${c.running ? '运行中' : '已退出'}
+        </span>
+      </div>
+      <div class="path">${c.home}</div>
+      <div class="kv"><span>数据目录</span><span>${c.db_exists ? '正常' : '缺少 workbuddy.db'}</span></div>
+      <div class="kv"><span>进程数</span><span>${c.processes.length}</span></div>
+    </div>`).join('');
+
+  const gate = $('gate');
+  const autoQuit = $('quick-quit').checked;
+  if (s.all_stopped) {
+    gate.className = 'gate ok';
+    gate.textContent = '两个客户端都已退出，可以执行写操作。';
+  } else if (autoQuit) {
+    gate.className = 'gate warn';
+    gate.textContent = s.running_names.join('、') + ' 正在运行。开始同步时会先请求退出它们，等进程消失后再写入。';
+  } else {
+    gate.className = 'gate bad';
+    gate.textContent = s.running_names.join('、') + ' 仍在运行，写操作会被拒绝。'
+      + '勾选「需要时自动退出两个客户端」，或自己先退干净。';
+  }
+  renderAutosync(s.autosync);
+  updateRunGate();
+  const canWrite = s.all_stopped || autoQuit;
+  $('btn-apply').disabled = quickBusy || !s.has_plan || !canWrite;
+  $('btn-backup').disabled = quickBusy || !canWrite;
+  $('btn-restore').disabled = quickBusy;
+  $('btn-quick').disabled = quickBusy;
+}
+
+const AUTOSYNC_LABELS = {
+  ok: ['ok', '同步成功'],
+  no_change: ['ok', '检查过，无变化'],
+  skipped_running: ['warn', '客户端仍在运行，已跳过'],
+  paused: ['warn', '已暂停'],
+  dry_run: ['warn', '演练模式（未写入）'],
+  plan_failed: ['bad', '生成计划失败'],
+  backup_failed: ['bad', '备份失败'],
+  apply_failed: ['bad', '执行失败'],
+  verify_failed: ['bad', '核验未通过'],
+  error: ['bad', '出错'],
+  unknown: ['warn', '状态未知'],
+};
+
+function renderAutosync(a) {
+  const el = $('autosync');
+  if (a && a.supported === false) {
+    el.innerHTML = '<div class="gate warn">本平台暂不支持自动同步</div>'
+      + `<p class="hint">${a.note || '自动同步依赖 macOS 的 launchd。'}</p>`;
+    return;
+  }
+  if (!a || !a.available) {
+    el.innerHTML = '自动同步模块不可用。';
+    return;
+  }
+  if (!a.installed) {
+    el.innerHTML = '<div class="gate warn">自动同步代理未安装。'
+      + '安装后两个客户端一旦都退出就会自动同步，无需手动执行。</div>'
+      + (a.install_available === false
+          ? '<p class="hint">当前运行的是打包版，不含代理安装器。'
+            + '要启用自动同步，请改用源码运行方式（见 README）。</p>'
+          : `<p class="hint">安装：<code>${a.install_hint}</code></p>`);
+    return;
+  }
+  const st = a.status || {};
+  const [tone, label] = AUTOSYNC_LABELS[st.last_result] || ['warn', st.last_result || '还没有运行记录'];
+  const bits = [];
+  if (st.last_sessions !== undefined && st.last_sessions !== null) {
+    bits.push(`会话 ${st.last_sessions} 条`);
+  }
+  if (st.last_human) bits.push(st.last_human);
+  if (st.last_duration_s) bits.push(`${st.last_duration_s} 秒`);
+  el.innerHTML = `
+    <div class="gate ${a.paused ? 'warn' : 'ok'}">
+      ${a.paused ? '自动同步已暂停' : '自动同步已开启'}
+      &nbsp;·&nbsp; 最近一次：<b>${label}</b>
+      ${st.updated_at ? `（${st.updated_at.replace('T', ' ').slice(0, 19)}）` : ''}
+      ${bits.length ? `&nbsp;·&nbsp; ${bits.join(' · ')}` : ''}
+    </div>
+    ${st.last_note ? `<p class="hint">备注：${st.last_note}</p>` : ''}
+    <p class="hint">每 120 秒检查一次，两个客户端都退出时才写入；写入前自动备份数据库，
+    可在状态目录里回滚。状态根：<code>${a.state_root}</code></p>`;
+}
+
+function updateRunGate() {
+  const el = $('run-gate');
+  if (!lastState) return;
+  if (lastState.all_stopped) {
+    el.className = 'gate ok';
+    el.textContent = '客户端已退出，可以直接执行。';
+  } else if ($('quick-quit').checked) {
+    el.className = 'gate warn';
+    el.textContent = lastState.running_names.join('、') + ' 正在运行，点执行时会先自动退出它们。';
+  } else {
+    el.className = 'gate bad';
+    el.textContent = lastState.running_names.join('、') + ' 仍在运行，执行按钮已锁定。';
+  }
+}
+
+// -- 一键同步的进度输出 ---------------------------------------------------
+// 步骤结果只在这种地方出现一次：面板上给结论，原始输出留给下面「执行日志」。
+function prog(text, tone) {
+  const box = $('quick-progress');
+  const div = document.createElement('div');
+  div.className = 'gate ' + (tone || 'warn');
+  div.textContent = text;
+  box.appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearProg() {
+  $('quick-progress').innerHTML = '';
+}
+
+// 保证两个客户端都已退出。autoQuit 勾着就替用户退出并等进程消失，
+// 否则直接拒绝——不猜用户的意思，也不偷偷跳过这道闸。
+async function ensureClientsStopped() {
+  const st = await api('/api/state');
+  if (st.all_stopped) return;
+  const names = st.running_names.join('、');
+  if (!$('quick-quit').checked) {
+    throw new Error(names + ' 仍在运行。请先退出客户端，或勾选「需要时自动退出两个客户端」。');
+  }
+  if (!window.confirm(
+      '即将请求退出：' + names + '\n\n'
+      + '正在这些客户端里进行的会话和任务会中断。\n'
+      + '本工具会先请求优雅退出，等进程真的消失后才开始写入。\n\n'
+      + '继续？')) {
+    throw new Error('已取消（未写入任何数据）。');
+  }
+  prog('正在请求退出 ' + names + '…');
+  const r = await api('/api/quit-clients', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ allow_force: $('quick-force').checked }),
+  });
+  if (!r.ok) {
+    throw new Error('仍有客户端在运行：' + r.remaining.map((x) => x.display).join('、')
+      + '。已中止，未写入任何数据。');
+  }
+  prog('客户端已全部退出。' + (r.forced.length ? '（其中 ' + r.forced.length + ' 个是强制结束的）' : ''), 'ok');
+}
+
+function renderSurvey(s) {
+  const human = (n) => {
+    if (!n) return '0B';
+    const u = ['B', 'KB', 'MB', 'GB'];
+    let i = 0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return (i === 0 ? n : n.toFixed(1)) + u[i];
+  };
+  const card = (h) => {
+    const c = h.counts || {};
+    return `<div class="card" style="margin:0">
+      <div class="host">${h.label}</div>
+      <div class="path">${h.path}</div>
+      <div class="kv"><span>当前账号</span><span class="mono">${(h.uid || '').slice(0, 8)}</span></div>
+      <div class="kv"><span>会话 / 正文</span><span>${c.sessions || 0} / ${c.conversations || 0}</span></div>
+      <div class="kv"><span>自动化</span><span>${c.automations || 0}</span></div>
+      <div class="kv"><span>技能</span><span>${(h.skills || []).length} 个</span></div>
+      <div class="kv"><span>projects</span><span>${human((h.sizes || {}).projects)}</span></div>
+      <div class="kv"><span>changes-detail</span><span>${human((h.sizes || {})['changes-detail'])}</span></div>
+    </div>`;
+  };
+  const sk = s.skills || {};
+  $('survey').innerHTML = `<div class="row">${s.homes.map(card).join('')}</div>
+    <div class="sep"></div>
+    <table>
+      <tr><th>技能差异</th><th class="num">数量</th></tr>
+      <tr><td>仅左侧独有</td><td class="num">${(sk.only_a || []).length}</td></tr>
+      <tr><td>仅右侧独有</td><td class="num">${(sk.only_b || []).length}</td></tr>
+      <tr><td>两边同名</td><td class="num">${(sk.shared || []).length}</td></tr>
+      <tr><td>合并后每边可用</td><td class="num">${
+        new Set([...(sk.only_a || []), ...(sk.only_b || []), ...(sk.shared || [])]).size}</td></tr>
+    </table>
+    <p class="hint">同名技能两边各留各的版本，不互相覆盖。</p>`;
+}
+
+// reveal=true 才滚动到审阅卡片（手动模式）；一键同步只借它填数据，不打断当前视图。
+function renderPlan(plan, reveal = true) {
+  const t = (plan.summary || {}).totals || {};
+  const rows = [['a2b', '左 → 右'], ['b2a', '右 → 左']].map(([side, label]) => {
+    const s = (plan.summary || {})[side] || {};
+    const c = (plan.counts || {})[side] || {};
+    const names = Object.entries(c).map(([k, v]) => `${k} ${v}`).join('、') || '无';
+    return `<tr>
+      <td>${label}<div class="path">${s.from || ''} → ${s.to || ''}</div></td>
+      <td class="num">${s.sessions_to_copy || 0}</td>
+      <td class="num">${s.sessions_skipped || 0}</td>
+      <td>${names}</td>
+    </tr>`;
+  }).join('');
+
+  $('plan-summary').innerHTML = `
+    <table>
+      <tr><th>方向</th><th class="num">待复制</th><th class="num">已存在跳过</th><th>表行数</th></tr>
+      ${rows}
+      <tr><th>合计</th><th class="num">${t.sessions_to_copy || 0}</th><th></th>
+          <th>约 ${t.approx_human || '0B'}</th></tr>
+    </table>
+    <p class="hint">生成于 ${plan.created_at || ''}。计划冻结了数据指纹，执行前若源数据变化会被拒绝并要求重新生成。</p>`;
+
+  $('plan-id').textContent = plan.plan_id || '';
+
+  const samples = (plan.sample || {}).a2b || [];
+  const samples2 = (plan.sample || {}).b2a || [];
+  const list = (arr) => arr.length
+    ? `<ul style="margin:6px 0 0;padding-left:18px">${arr.map((x) =>
+        `<li>${x.title} <span class="path">${(x.cwd || '').split('/').slice(-1)[0]}</span></li>`).join('')}</ul>`
+    : '<p class="hint">没有新增会话。</p>';
+  $('plan-detail').innerHTML = `
+    <h2>将新增的会话</h2>
+    <div class="row">
+      <div><div class="host">左 → 右（前 ${samples.length} 条）</div>${list(samples)}</div>
+      <div><div class="host">右 → 左（前 ${samples2.length} 条）</div>${list(samples2)}</div>
+    </div>
+    <div class="sep"></div>
+    <div class="kv"><span>生效选项</span><span>${Object.entries(plan.options || {})
+      .filter(([, v]) => v).map(([k]) => k).join('、') || '无'}</span></div>`;
+
+  $('plan-card').classList.remove('hidden');
+  $('run-card').classList.remove('hidden');
+  if (reveal) {
+    $('manual').open = true;
+    $('plan-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  updateRunGate();
+}
+
+function directionNote(a, b) {
+  const sa = (a.counts || {}).sessions || 0;
+  const sb = (b.counts || {}).sessions || 0;
+  if (sa === sb) return `自动判定方向：两边会话数相同（各 ${sa} 条）。`;
+  const [main, other, hi, lo] = sa > sb ? [a, b, sa, sb] : [b, a, sb, sa];
+  return `自动判定方向：${main.label} 更全（${hi} 条）对 ${other.label}（${lo} 条），`
+    + `差额 ${hi - lo} 条是主要补充方向。本工具两边并集，不需要你选方向。`;
+}
+
+// -- 一键同步 ---------------------------------------------------------------
+// 顺序是刻意的：先退出客户端再建计划。客户端退出时会 flush 自己的状态，
+// 反过来先建计划再退客户端，指纹会漂移，执行时会被引擎拒绝。
+$('btn-quick').onclick = async () => {
+  if (quickBusy) return;
+  const btn = $('btn-quick');
+  quickBusy = true;
+  btn.disabled = true; btn.textContent = '同步中…';
+  clearProg();
+  $('log').textContent = '';
+  $('plan-status').textContent = '';
+  $('restore-status').textContent = '';
+  let applyCode = null;
+  try {
+    // 1 · 客户端
+    await ensureClientsStopped();
+
+    // 2 · 盘点
+    const survey = await api('/api/survey');
+    renderSurvey(survey);
+    const [ha, hb] = survey.homes;
+    prog(`盘点：${ha.label} 会话 ${(ha.counts || {}).sessions || 0} 条 · `
+      + `${hb.label} 会话 ${(hb.counts || {}).sessions || 0} 条`, 'ok');
+    prog(directionNote(ha, hb));
+
+    // 3 · 计划
+    const plan = await api('/api/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ options: collectOptions() }),
+    });
+    renderPlan(plan, false);
+    $('restore-card').classList.remove('hidden');
+    const t = (plan.summary || {}).totals || {};
+    const sA = (plan.summary || {}).a2b || {};
+    const sB = (plan.summary || {}).b2a || {};
+    const todo = t.sessions_to_copy || 0;
+    prog(`计划：待新增 ${todo} 条会话（左→右 ${sA.sessions_to_copy || 0} · `
+      + `右→左 ${sB.sessions_to_copy || 0}），约 ${t.approx_human || '0B'}`, todo ? 'ok' : 'ok');
+    if (!todo) {
+      prog('两边已经一致，没有需要新增的内容。已停止，未写入任何数据。', 'ok');
+      return;
+    }
+
+    // 4 · 备份
+    if ($('quick-backup').checked) {
+      prog('正在备份两个数据目录…');
+      let ok = null;
+      await stream('/api/backup', (ev) => {
+        if (ev.type === 'log') appendLog(ev.text);
+        if (ev.type === 'done') ok = ev.code === 0;
+      });
+      if (ok === false) prog('备份失败，已中止，未写入任何数据。', 'bad');
+      if (ok === false) return;
+      prog('备份完成。', 'ok');
+    } else {
+      prog('已跳过备份（勾选项未开）。', 'warn');
+    }
+
+    // 5 · 执行
+    prog('正在执行迁移…');
+    await stream('/api/apply?plan_id=' + encodeURIComponent(plan.plan_id), (ev) => {
+      if (ev.type === 'log') appendLog(ev.text);
+      if (ev.type === 'done') applyCode = ev.code;
+    });
+    if (applyCode !== 0) {
+      prog(`迁移未成功（退出码 ${applyCode}）。日志在上方「执行日志」里，可回滚。`, 'bad');
+      return;
+    }
+    prog('迁移完成。', 'ok');
+
+    // 6 · 核验
+    prog('正在核验…');
+    const v = await api('/api/verify', { method: 'POST' });
+    appendLog('\n--- 核验 ---\n' + (v.log || '(无输出)'));
+    if (v.code === 0) {
+      prog('核验通过：要新增的内容都已到位。重启两个客户端就能看到新会话。', 'ok');
+    } else {
+      prog(`核验未通过（退出码 ${v.code}）。详见执行日志，可用下方回滚撤销。`, 'bad');
+    }
+  } catch (e) {
+    prog('已中止：' + e.message, 'bad');
+  } finally {
+    quickBusy = false;
+    btn.disabled = false; btn.textContent = '开始同步';
+    refreshState();
+  }
+};
+
+$('btn-survey').onclick = async () => {
+  const btn = $('btn-survey');
+  btn.disabled = true; btn.textContent = '读取中…';
+  try {
+    renderSurvey(await api('/api/survey'));
+    btn.textContent = '重新读取';
+  } catch (e) {
+    $('survey').innerHTML = '<div class="gate bad">' + e.message + '</div>';
+    btn.textContent = '重试';
+  } finally { btn.disabled = false; }
+};
+
+$('btn-plan').onclick = async () => {
+  const btn = $('btn-plan');
+  btn.disabled = true; $('plan-status').textContent = '生成中…';
+  try {
+    const plan = await api('/api/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ options: collectOptions() }),
+    });
+    renderPlan(plan);
+    $('plan-status').textContent = '计划已生成';
+    $('log').textContent = '等待执行…';
+    $('restore-card').classList.remove('hidden');
+  } catch (e) {
+    $('plan-status').innerHTML = '<span style="color:var(--bad)">' + e.message + '</span>';
+  } finally { btn.disabled = false; }
+};
+
+$('btn-apply').onclick = async () => {
+  const btn = $('btn-apply');
+  if (!window.confirm('确认执行迁移？\n\n这会向两个数据目录写入数据。\n完成后需要重启两个客户端才能看到新会话。')) return;
+  btn.disabled = true; btn.textContent = '执行中…';
+  $('log').textContent = '';
+  try {
+    await ensureClientsStopped();
+    await stream('/api/apply?plan_id=' + encodeURIComponent($('plan-id').textContent), (ev) => {
+      if (ev.type === 'log') appendLog(ev.text);
+      if (ev.type === 'done') {
+        appendLog('\n[退出码 ' + ev.code + '] ' +
+          (ev.code === 0 ? '完成。请重启两个客户端后再查看。' : '未成功，请查看上方日志。'));
+      }
+    });
+  } catch (e) {
+    appendLog('\n执行未启动：' + e.message + '\n');
+  } finally {
+    btn.disabled = false; btn.textContent = '执行迁移';
+    refreshState();
+  }
+};
+
+$('btn-backup').onclick = async () => {
+  if (!window.confirm('开始备份两个数据目录？\n\n默认排除 app / logs / traces 等大目录。')) return;
+  const btn = $('btn-backup');
+  btn.disabled = true; btn.textContent = '备份中…';
+  $('log').textContent = '';
+  try {
+    await ensureClientsStopped();
+    await stream('/api/backup', (ev) => {
+      if (ev.type === 'log') appendLog(ev.text);
+      if (ev.type === 'done') appendLog('\n[退出码 ' + ev.code + ']');
+    });
+  } catch (e) { appendLog('备份未启动：' + e.message + '\n'); }
+  finally { btn.disabled = false; btn.textContent = '先做备份'; }
+};
+
+$('btn-verify').onclick = async () => {
+  const btn = $('btn-verify');
+  btn.disabled = true; btn.textContent = '核验中…'; $('log').textContent = '';
+  try {
+    const r = await api('/api/verify', { method: 'POST' });
+    $('log').textContent = r.log || '(无输出)';
+  } catch (e) { $('log').textContent = '核验失败：' + e.message; }
+  finally { btn.disabled = false; btn.textContent = '核验'; }
+};
+
+$('btn-restore').onclick = async () => {
+  if (!$('plan-id').textContent.trim()) { alert('没有可回滚的计划'); return; }
+  if (!window.confirm('回滚会删除本工具新建的会话行与文件。\n\n'
+      + '被合并改写的记忆原文不会自动恢复（已留 .before-bridge-* 备份）。\n\n继续？')) return;
+  const btn = $('btn-restore');
+  btn.disabled = true; $('restore-status').textContent = '回滚中…';
+  try {
+    // 服务端自己知道本会话的 plan_id，不需要用户手打确认串。
+    const r = await api('/api/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    $('restore-status').innerHTML = r.code === 0
+      ? '<span style="color:var(--ok)">已回滚</span>'
+      : '<span style="color:var(--bad)">回滚未成功</span>';
+    $('log').textContent = r.log || '(无输出)';
+    $('run-card').classList.remove('hidden');
+  } catch (e) {
+    $('restore-status').innerHTML = '<span style="color:var(--bad)">' + e.message + '</span>';
+  } finally { btn.disabled = false; }
+};
+
+// 勾选状态一变就重画闸门文案，别等下一次 2 秒轮询。
+['quick-quit', 'quick-force', 'quick-backup'].forEach((id) => {
+  $(id).addEventListener('change', () => { if (lastState) refreshState(); });
+});
+
+renderOptions();
+refreshState();
+setInterval(refreshState, 2000);
+</script>
+</body>
+</html>
