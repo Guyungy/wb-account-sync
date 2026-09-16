@@ -40,7 +40,7 @@
 这个工具可以把两边的会话历史、记忆、技能、配置做**双向合并**，且不会覆盖任何已有数据。
 
 ```bash
-git clone --branch product/safe-preview-v0.2 https://github.com/Guyungy/wb-account-sync.git
+git clone https://github.com/Guyungy/wb-account-sync.git
 cd wb-account-sync
 python3 tools/wb_ui.py
 ```
@@ -129,7 +129,7 @@ wb-account-sync --version
 ### 方式二：从源码安装
 
 ```bash
-git clone --branch product/safe-preview-v0.2 https://github.com/Guyungy/wb-account-sync.git
+git clone https://github.com/Guyungy/wb-account-sync.git
 cd wb-account-sync
 python3 -m venv .venv
 . .venv/bin/activate
