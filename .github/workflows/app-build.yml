@@ -1,0 +1,116 @@
+name: Desktop app build
+
+# 把工具打成各平台的原生应用。
+#
+# PyInstaller 不支持交叉编译：macOS 的 .app 只能在 macOS 上构建，Windows 的
+# .exe 只能在 Windows 上构建。所以这里用矩阵，两个平台各出一份产物。
+#
+# 触发方式：
+#   - 推送 v* 标签：构建完成后再把两个 zip 附加到同名 Release
+#   - 手动（workflow_dispatch）：只上传为 workflow artifact，方便先验货
+#
+# 说明：构建机器上产出的 .app 只做 ad-hoc 签名（codesign -s -），不是公证
+# 签名。用户首次打开仍需「右键 → 打开」，或执行
+# `xattr -dr com.apple.quarantine`。要消除这个提示需要 Apple Developer
+# 账号做真正的签名 + 公证。Windows 的 .exe 未签名，会触发 SmartScreen 的
+# 「更多信息 → 仍要运行」提示。
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build · ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macOS
+            asset: wb-account-sync-macos
+          - os: windows-latest
+            label: Windows
+            asset: wb-account-sync-windows
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pyinstaller
+
+      - name: Build desktop app
+        run: python -m PyInstaller packaging/wb-account-sync.spec --noconfirm --log-level WARN
+
+      # 自检：打包最容易漏掉延迟导入的模块，而窗口模式下完全没有现象。
+      # --selftest 会把四个模块的导入结果和客户端探测结果打出来。
+      - name: Self-test frozen app
+        if: runner.os == 'macOS'
+        run: |
+          xattr -cr dist/wb-account-sync.app
+          dist/wb-account-sync.app/Contents/MacOS/wb-account-sync --selftest
+
+      - name: Self-test frozen app
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & dist\wb-account-sync.exe --selftest
+          if ($LASTEXITCODE -ne 0) { throw "selftest exit code $LASTEXITCODE" }
+
+      - name: Ad-hoc sign
+        if: runner.os == 'macOS'
+        run: |
+          codesign --force --deep --sign - dist/wb-account-sync.app
+          codesign --verify --verbose=2 dist/wb-account-sync.app
+
+      # ditto 会保留 .app 里的符号链接、权限位和签名；zip 命令会破坏这些。
+      - name: Package
+        if: runner.os == 'macOS'
+        run: ditto -c -k --sequesterRsrc --keepParent dist/wb-account-sync.app dist/${{ matrix.asset }}.zip
+
+      - name: Package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist\wb-account-sync.exe -DestinationPath dist\${{ matrix.asset }}.zip -Force
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  attach:
+    name: Attach to release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      # 这里用主版本标签而不是 SHA：upload-artifact 那个 SHA 是本仓库既有的，
+      # download-artifact 之前没用过，不猜 SHA。
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Compute checksums
+        run: |
+          cd assets
+          sha256sum *.zip > SHA256SUMS-desktop.txt
+          cat SHA256SUMS-desktop.txt
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" assets/*.zip assets/SHA256SUMS-desktop.txt --clobber

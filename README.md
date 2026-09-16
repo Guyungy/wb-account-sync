@@ -22,6 +22,7 @@
 ## 目录
 
 - [30 秒上手](#30-秒上手)
+- [桌面应用（免装 Python）](#桌面应用免装-python)
 - [它能做什么](#它能做什么)
 - [安全模型](#安全模型)
 - [两种使用方式](#两种使用方式)
@@ -49,6 +50,26 @@ python3 tools/wb_ui.py
 **只有退出后，「执行」按钮才会解锁。**
 
 macOS 用户也可以直接双击 [`tools/ui.command`](tools/ui.command)，把它拖到 Dock 上当 App 用。
+
+---
+
+## 桌面应用（免装 Python）
+
+不想装 Python、也不想碰终端，就下载现成的应用：
+
+| 平台 | 文件 | 用法 |
+|---|---|---|
+| macOS | `wb-account-sync-macos.zip` | 解压出 `wb-account-sync.app`，拖进「应用程序」，双击 |
+| Windows | `wb-account-sync-windows.zip` | 解压出 `wb-account-sync.exe`，双击 |
+
+自带 Python 运行时，约 20 MB，运行时不依赖任何第三方库。双击后浏览器自动打开界面。
+
+两个系统首次打开都会拦一次（因为没买代码签名证书）：macOS 上**右键 → 打开**，
+Windows 上点**「更多信息」→「仍要运行」**。
+
+> **Windows 侧尚未在真机验证。** 数据目录与客户端进程名都是推断值，首次使用前
+> 请先读 [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md) 的「平台功能对照」——那里说明了
+> 为什么这一点需要你手工核对一次。
 
 ---
 
@@ -92,6 +113,7 @@ macOS 用户也可以直接双击 [`tools/ui.command`](tools/ui.command)，把�
 cd wb-account-sync
 python3 tools/wb_ui.py              # 自动挑端口、自动开浏览器
 ./tools/ui.command                  # macOS：双击启动，可拖到 Dock
+tools\ui.bat                        # Windows：双击启动（需已装 Python 3.10+）
 ```
 
 页面流程：**读取盘点 → 勾选迁移范围 → 生成计划 → 审阅 plan_id → 粘贴确认 → 执行迁移 → 核验 / 回滚**。
@@ -112,9 +134,13 @@ wb-account-sync plan   --home ~/.workbuddy --source <旧账号UUID> --target <�
 wb-account-sync apply  --plan plan.json --state-dir ./state --confirm <plan_id>
 ```
 
-### 自动同步（无人值守）
+### 自动同步（无人值守，仅 macOS）
 
-不想每次手动点「执行」？装一个 macOS launchd 代理，让它在**两个客户端都退出时自动同步**：
+不想每次手动点「执行」？装一个 launchd 代理，让它在**两个客户端都退出时自动同步**：
+
+> Windows 上暂不可用：这套机制依赖 macOS 的 launchd，Windows 侧要改用任务计划程序
+> （`schtasks`），尚未实现。打包版也不含这个安装器——它依赖 `tools/wb_autosync.py` 的路径。
+> Windows 上其余功能（盘点 / 计划 / 备份 / 执行 / 核验 / 回滚）不受影响，手动执行即可。
 
 ```bash
 python3 tools/wb_autosync.py install --interval 120   # 默认每 120 秒检查一次
@@ -143,6 +169,10 @@ python3 tools/wb_autosync.py uninstall  # 卸载（保留日志与历史运行�
 ---
 
 ## 安装
+
+### 方式零：下载桌面应用（免装 Python）
+
+见上文 [桌面应用（免装 Python）](#桌面应用免装-python)——自带 Python 运行时，双击即用。
 
 ### 方式一：下载 wheel（推荐体验）
 
@@ -185,6 +215,7 @@ python3 tools/autosync_check.py   # 自动同步层端到端（10 项）
 
 ## 文档
 
+- [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md) — 桌面应用：下载、首次放行、平台差异与自行构建
 - [`docs/HOME_BRIDGE.md`](docs/HOME_BRIDGE.md) — 跨 App 数据目录打通与自动同步详细说明
 - [`docs/SAFETY.md`](docs/SAFETY.md) — 安全边界及故障处理
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — 长期路线图与 1.0 验收

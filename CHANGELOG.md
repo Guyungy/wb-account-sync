@@ -1,5 +1,43 @@
 # 更新记录
 
+## 未发布 — macOS / Windows 桌面应用
+
+把工具打成各平台的原生应用，用户不需要装 Python，双击图标即用。
+
+- 新增 `tools/app_main.py`：打包产物的桌面入口。窗口模式没有终端，异常会被静默
+  吞掉，现象只是"双击没反应"，所以这里包一层——捕获全部异常与 `SystemExit`，
+  用原生对话框（macOS `osascript`、Windows `MessageBoxW`）摊开给用户，
+  再返回非零退出码。同时补了 stdout/stderr 兜底：Windows `--noconsole` 构建下
+  这两个流是 `None`，连 `argparse --version` 都会抛 `AttributeError`。
+- 新增 `--selftest`：不启动服务，只验证打包完整性（四个模块能否 import、
+  客户端能否探测），输出 JSON，`ok: false` 即失败。打包漏模块时这是唯一的可见信号，
+  CI 拿它做冒烟测试。
+- 新增 `packaging/wb-account-sync.spec`：macOS 出 `wb-account-sync.app`
+  （onedir + BUNDLE），Windows 出单文件 `wb-account-sync.exe`（无控制台）。
+  剔除 `tkinter` 等无用体积；`hiddenimports` 显式列出 `tools/` 里的同目录模块
+  ——它们靠运行时 `sys.path` 注入加载，PyInstaller 的静态分析追不到这条路径。
+  版本号从 `wb_account_sync/__init__.py` 读，写进 `.app` 的 `Info.plist`。
+- 新增 `.github/workflows/app-build.yml`：`macos-latest` + `windows-latest` 矩阵
+  （PyInstaller 不支持交叉编译，只能各平台各自构建）。构建后自检、ad-hoc 签名、
+  用 `ditto` 打包（保留符号链接与权限位），推 `v*` 标签时自动附加到同名 Release
+  并附上 `SHA256SUMS-desktop.txt`。
+- 新增 `tools/ui.bat`：Windows 的免打包启动器，自动探测 Python 3.10+。
+  提示文本刻意全用 ASCII——cmd.exe 按活动 OEM 代码页逐行解码 `.bat`，中文不可靠。
+- `tools/wb_ui.py`：
+  - 自动同步状态在非 macOS 返回 `supported: false`，界面改说"本平台暂不支持"
+    而不是"模块不可用"；非 macOS 下不再 import `wb_autosync`（内含 launchctl / osascript）。
+  - 新增 `IS_FROZEN`：打包版没有 `tools/` 目录，自动同步的安装指引改为说明文案，
+    不再给出跑不通的命令。
+  - 新增 `open_browser()`：`webbrowser.open` 在打包环境里可能只是返回 `False`
+    （环境变量被裁、没有注册 handler），此时退回系统命令
+    （macOS `open` / Windows `os.startfile` / Linux `xdg-open`）。
+- 新增 `docs/DESKTOP_APP.md`：下载方式、首次放行（Gatekeeper / SmartScreen）、
+  平台功能对照、自行构建与已知限制。
+- **Windows 侧仍未在真机验证**：数据目录候选（`%APPDATA%\WorkBuddy` 等）与
+  客户端进程名（`WorkBuddy.exe`）都是推断值。文档已把"先用任务管理器核对进程名"
+  列为 Windows 首次使用的前置检查——进程名对不上会导致"客户端在运行却显示已退出"，
+  这是危险方向的错误。
+
 ## 0.3.0a1 — 2026-09-16
 
 首个公开发布版（Alpha）。在 0.2.0a1 的基础上保持范围收紧，新增跨 App 数据目录打通

@@ -43,6 +43,10 @@ import wb_home_bridge as bridge  # noqa: E402  同目录模块
 import wb_platform  # noqa: E402
 
 VERSION = "0.1.0"
+# 是否运行在 PyInstaller 冻结出来的可执行文件里。打包版没有 tools/ 目录，
+# 凡是依赖脚本自身路径的功能（例如 launchd 代理注册）都不能照常提供，
+# 界面必须把这类入口改成说明而不是给出跑不通的命令。
+IS_FROZEN = bool(getattr(sys, "frozen", False))
 DEFAULT_STATE_DIR = "~/.wb-home-bridge"
 # 自动同步代理的状态根默认与界面状态目录一致，但可用 WB_AUTOSYNC_ROOT 单独指向
 DEFAULT_AUTOSYNC_ROOT = "~/.wb-home-bridge"
@@ -81,25 +85,42 @@ def autosync_status(root: str) -> dict[str, Any]:
     """只读读取自动同步代理的状态，供界面展示。
 
     不复用界面自己的 --state-dir —— 代理是独立进程，它有自己的状态根。
+
+    自动同步靠 macOS 的 launchd 实现。其他平台到此为止，**不去 import
+    ``wb_autosync``** —— 那个模块里有 launchctl / osascript 调用，在
+    Windows 上 import 没有意义。界面据此换一句说明，而不是报「模块不可用」。
     """
+    if not wb_platform.IS_MAC:
+        return {
+            "available": False,
+            "supported": False,
+            "note": (
+                f"自动同步依赖 macOS 的 launchd，当前系统"
+                f"（{wb_platform.platform_label()}）暂不支持。"
+                "盘点、计划、备份、执行、回滚都不受影响，仍可手动操作。"
+            ),
+        }
     try:
         import wb_autosync as asy
     except Exception as exc:  # 模块缺失或导入失败都不该拖垮界面
-        return {"available": False, "error": str(exc)}
+        return {"available": False, "supported": True, "error": str(exc)}
     ns = argparse.Namespace(state_root=root)
     try:
         saved = asy.read_status(ns)
         return {
             "available": True,
+            "supported": True,
             "installed": os.path.exists(asy.plist_target()),
             "paused": os.path.exists(asy.paused_path(ns)),
             "state_root": root,
             "log": asy.log_path(ns),
             "plist": asy.plist_target(),
             "status": saved,
+            "install_available": not IS_FROZEN,
+            "install_hint": "python3 tools/wb_autosync.py install",
         }
     except Exception as exc:
-        return {"available": False, "error": str(exc)}
+        return {"available": False, "supported": True, "error": str(exc)}
 
 
 # --------------------------------------------------------------------------
@@ -765,6 +786,11 @@ const AUTOSYNC_LABELS = {
 
 function renderAutosync(a) {
   const el = $('autosync');
+  if (a && a.supported === false) {
+    el.innerHTML = '<div class="gate warn">本平台暂不支持自动同步</div>'
+      + `<p class="hint">${a.note || '自动同步依赖 macOS 的 launchd。'}</p>`;
+    return;
+  }
   if (!a || !a.available) {
     el.innerHTML = '自动同步模块不可用。';
     return;
@@ -772,7 +798,10 @@ function renderAutosync(a) {
   if (!a.installed) {
     el.innerHTML = '<div class="gate warn">自动同步代理未安装。'
       + '安装后两个客户端一旦都退出就会自动同步，无需手动执行。</div>'
-      + '<p class="hint">安装：<code>python3 tools/wb_autosync.py install</code></p>';
+      + (a.install_available === false
+          ? '<p class="hint">当前运行的是打包版，不含代理安装器。'
+            + '要启用自动同步，请改用源码运行方式（见 README）。</p>'
+          : `<p class="hint">安装：<code>${a.install_hint}</code></p>`);
     return;
   }
   const st = a.status || {};
@@ -1028,6 +1057,32 @@ def build_state(args: argparse.Namespace) -> UiState:
     )
 
 
+def open_browser(url: str) -> bool:
+    """打开默认浏览器，``webbrowser`` 不灵时用系统原生命令兜底。
+
+    打包成 ``.app`` / ``.exe`` 之后，``webbrowser`` 偶尔找不到默认浏览器
+    （环境变量被裁掉、没有注册的 handler），返回 ``False`` 而不是抛异常。
+    这时退回到系统命令，否则用户双击后的现象就是"没反应"。
+    """
+    try:
+        if webbrowser.open(url):
+            return True
+    except Exception:
+        pass
+
+    import subprocess
+
+    try:
+        if sys.platform == "darwin":
+            return subprocess.run(["open", url], check=False).returncode == 0
+        if sys.platform.startswith("win"):
+            os.startfile(url)  # type: ignore[attr-defined]
+            return True
+        return subprocess.run(["xdg-open", url], check=False).returncode == 0
+    except Exception:
+        return False
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="wb-ui",
@@ -1080,7 +1135,7 @@ def main(argv: list[str] | None = None) -> int:
     sys.stdout.flush()
 
     if not args.no_open:
-        threading.Timer(0.4, lambda: webbrowser.open(url)).start()
+        threading.Timer(0.4, lambda: open_browser(url)).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
