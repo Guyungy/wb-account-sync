@@ -8,15 +8,16 @@
 package main
 
 import (
-	"sort"
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/Guyungy/wb-account-sync/gobridge/internal/bridge"
 	"github.com/Guyungy/wb-account-sync/gobridge/internal/platform"
+	"github.com/Guyungy/wb-account-sync/gobridge/internal/pyjson"
 )
 
 const version = "0.3.0a2-go"
@@ -41,10 +42,18 @@ func run(argv []string) int {
 		return cmdStatus(argv[1:])
 	case "quit-clients":
 		return cmdQuitClients(argv[1:])
-	case "survey":
+	case "survey", "doctor":
 		return cmdSurvey(argv[1:])
 	case "plan":
 		return cmdPlan(argv[1:])
+	case "apply":
+		return cmdApply(argv[1:])
+	case "backup":
+		return cmdBackup(argv[1:])
+	case "verify":
+		return cmdVerify(argv[1:])
+	case "restore":
+		return cmdRestore(argv[1:])
 	case "dbg-rows":
 		return cmdDbgRows(argv[1:])
 	default:
@@ -61,12 +70,19 @@ func usage() {
   wb-bridge status        [--json]                       客户端运行状态与数据目录
   wb-bridge quit-clients  [--json] [--force] [--wait 秒]  退出两个客户端并等进程消失
   wb-bridge survey        [--json] [--home-a 路径] [--home-b 路径]
-  wb-bridge plan          [--json] [--home-a 路径] [--home-b 路径] [选项]
+  wb-bridge plan          [--json] [--output 文件] [--home-a 路径] [--home-b 路径] [选项]
+  wb-bridge apply         --plan 文件 --state-dir 目录 --confirm plan_id
+  wb-bridge verify        --plan 文件
+  wb-bridge backup        --dest 目录 [--label 标签] [--include-heavy]
+  wb-bridge restore       --run-dir 目录 --confirm plan_id
 
 plan 选项（默认只开 changes / skills / memory / claw）：
   --no-changes --no-skills --no-memory --no-claw
   --include-plugins --include-automations --include-storage
   --include-connectors --overwrite-assets
+
+写操作（apply / backup）默认要求两个客户端都已退出；确知无写入冲突时
+可用 --allow-client-running 绕过，风险自负。
 `)
 }
 
@@ -75,12 +91,21 @@ plan 选项（默认只开 changes / skills / memory / claw）：
 // --------------------------------------------------------------------------
 
 type flags struct {
-	json    bool
-	force   bool
-	wait    time.Duration
-	homeA   string
-	homeB   string
-	options map[string]any
+	json         bool
+	force        bool
+	wait         time.Duration
+	homeA        string
+	homeB        string
+	options      map[string]any
+	output       string
+	planPath     string
+	stateDir     string
+	confirm      string
+	dest         string
+	label        string
+	includeHeavy bool
+	runDir       string
+	allowRunning bool
 }
 
 func parseFlags(argv []string) (*flags, error) {
@@ -94,11 +119,16 @@ func parseFlags(argv []string) (*flags, error) {
 			i++
 			return argv[i], nil
 		}
+		str := func() (string, error) { return valueOf(arg, next) }
 		switch {
 		case arg == "--json":
 			f.json = true
 		case arg == "--force":
 			f.force = true
+		case arg == "--allow-client-running":
+			f.allowRunning = true
+		case arg == "--include-heavy":
+			f.includeHeavy = true
 		case arg == "--wait":
 			v, err := next()
 			if err != nil {
@@ -110,17 +140,59 @@ func parseFlags(argv []string) (*flags, error) {
 			}
 			f.wait = secs
 		case arg == "--home-a" || strings.HasPrefix(arg, "--home-a="):
-			v, err := valueOf(arg, next)
+			v, err := str()
 			if err != nil {
 				return nil, err
 			}
 			f.homeA = v
 		case arg == "--home-b" || strings.HasPrefix(arg, "--home-b="):
-			v, err := valueOf(arg, next)
+			v, err := str()
 			if err != nil {
 				return nil, err
 			}
 			f.homeB = v
+		case arg == "--output" || strings.HasPrefix(arg, "--output="):
+			v, err := str()
+			if err != nil {
+				return nil, err
+			}
+			f.output = v
+		case arg == "--plan" || strings.HasPrefix(arg, "--plan="):
+			v, err := str()
+			if err != nil {
+				return nil, err
+			}
+			f.planPath = v
+		case arg == "--state-dir" || strings.HasPrefix(arg, "--state-dir="):
+			v, err := str()
+			if err != nil {
+				return nil, err
+			}
+			f.stateDir = v
+		case arg == "--confirm" || strings.HasPrefix(arg, "--confirm="):
+			v, err := str()
+			if err != nil {
+				return nil, err
+			}
+			f.confirm = v
+		case arg == "--dest" || strings.HasPrefix(arg, "--dest="):
+			v, err := str()
+			if err != nil {
+				return nil, err
+			}
+			f.dest = v
+		case arg == "--label" || strings.HasPrefix(arg, "--label="):
+			v, err := str()
+			if err != nil {
+				return nil, err
+			}
+			f.label = v
+		case arg == "--run-dir" || strings.HasPrefix(arg, "--run-dir="):
+			v, err := str()
+			if err != nil {
+				return nil, err
+			}
+			f.runDir = v
 		case arg == "--no-changes":
 			f.options["include_changes"] = false
 		case arg == "--no-skills":
@@ -225,10 +297,10 @@ func cmdStatus(argv []string) int {
 	}
 	if f.json {
 		return emitJSON(map[string]any{
-			"platform":     platform.PlatformLabel(),
-			"clients":      statuses,
+			"platform":      platform.PlatformLabel(),
+			"clients":       statuses,
 			"running_names": running,
-			"all_stopped":  len(running) == 0,
+			"all_stopped":   len(running) == 0,
 		})
 	}
 	fmt.Printf("平台：%s\n", platform.PlatformLabel())
@@ -382,8 +454,23 @@ func cmdPlan(argv []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	data := plan.AsDict()
+	if f.output != "" {
+		out := platform.ExpandPath(f.output)
+		if _, serr := os.Stat(out); serr == nil {
+			return fail(fmt.Errorf("输出文件已存在，不覆盖：%s", out))
+		}
+		text, merr := pyjson.MarshalIndent(data, 2)
+		if merr != nil {
+			return fail(merr)
+		}
+		if werr := os.WriteFile(out, []byte(text), 0o600); werr != nil {
+			return fail(werr)
+		}
+		os.Chmod(out, 0o600)
+	}
 	if f.json {
-		return emitJSON(plan.AsDict())
+		return emitJSON(data)
 	}
 	totals, _ := plan.Summary["totals"].(map[string]any)
 	fmt.Printf("plan_id: %v\n", plan.PlanID)
@@ -393,5 +480,141 @@ func cmdPlan(argv []string) int {
 			side, s["from"], s["to"], s["sessions_to_copy"], s["sessions_skipped"])
 	}
 	fmt.Printf("合计：%v 条会话，约 %v\n", totals["sessions_to_copy"], totals["approx_human"])
+	if f.output != "" {
+		fmt.Printf("计划已写入：%s\n", platform.ExpandPath(f.output))
+	}
+	return 0
+}
+
+// logLine / warnLine 是给引擎用的两个输出通道。
+// 引擎本身不打印，是为了让 CLI 与 HTTP UI 能用不同的方式消费同一份事件流。
+func logLine(msg string)  { fmt.Println(msg) }
+func warnLine(msg string) { fmt.Fprintln(os.Stderr, msg) }
+
+// requireClientsStopped 是写操作的前置守卫。
+//
+// 客户端在运行时持有数据库写锁与内存中的状态副本：此时写入要么被锁挡住，
+// 要么写进去了但被客户端的退出 flush 覆盖掉——后者更糟，因为不报错。
+func requireClientsStopped(allowRunning bool) error {
+	if allowRunning {
+		return nil
+	}
+	statuses, err := platform.ClientStatuses()
+	if err != nil {
+		return err
+	}
+	names := []string{}
+	for _, s := range statuses {
+		if s.Running {
+			names = append(names, s.Display)
+		}
+	}
+	if len(names) > 0 {
+		return fmt.Errorf("%s 仍在运行。请先完全退出客户端（或加 --allow-client-running，风险自负）。",
+			strings.Join(names, "、"))
+	}
+	return nil
+}
+
+func cmdApply(argv []string) int {
+	f, err := parseFlags(argv)
+	if err != nil {
+		return fail(err)
+	}
+	if f.planPath == "" || f.stateDir == "" || f.confirm == "" {
+		return fail(fmt.Errorf("apply 需要 --plan、--state-dir、--confirm 三个参数"))
+	}
+	if err := requireClientsStopped(f.allowRunning); err != nil {
+		return fail(err)
+	}
+	a, b, err := homes(f)
+	if err != nil {
+		return fail(err)
+	}
+	res, err := bridge.Apply(a, b, bridge.ApplyOptions{
+		PlanPath: platform.ExpandPath(f.planPath),
+		Confirm:  f.confirm,
+		StateDir: f.stateDir,
+	}, logLine, warnLine)
+	if err != nil {
+		return fail(err)
+	}
+	fmt.Println("请重启两个 App 后再查看（客户端有内存缓存，不重启看不到新会话）。")
+	if f.json {
+		return emitJSON(res)
+	}
+	return 0
+}
+
+func cmdBackup(argv []string) int {
+	f, err := parseFlags(argv)
+	if err != nil {
+		return fail(err)
+	}
+	if f.dest == "" {
+		return fail(fmt.Errorf("backup 需要 --dest 指定备份根目录"))
+	}
+	if err := requireClientsStopped(f.allowRunning); err != nil {
+		return fail(err)
+	}
+	a, b, err := homes(f)
+	if err != nil {
+		return fail(err)
+	}
+	root, err := bridge.Backup([]*bridge.Home{a, b}, bridge.BackupOptions{
+		Dest:         f.dest,
+		Label:        f.label,
+		IncludeHeavy: f.includeHeavy,
+	}, logLine)
+	if err != nil {
+		return fail(err)
+	}
+	if f.json {
+		return emitJSON(map[string]any{"root": root})
+	}
+	return 0
+}
+
+func cmdVerify(argv []string) int {
+	f, err := parseFlags(argv)
+	if err != nil {
+		return fail(err)
+	}
+	if f.planPath == "" {
+		return fail(fmt.Errorf("verify 需要 --plan 指定计划文件"))
+	}
+	a, b, err := homes(f)
+	if err != nil {
+		return fail(err)
+	}
+	results, ok, err := bridge.Verify(a, b, platform.ExpandPath(f.planPath), logLine)
+	if err != nil {
+		return fail(err)
+	}
+	if f.json {
+		emitJSON(map[string]any{"ok": ok, "results": results})
+	}
+	if !ok {
+		// 3 与 Python 版一致：核验未通过是"有结论的失败"，不是参数错误（2）。
+		return 3
+	}
+	return 0
+}
+
+func cmdRestore(argv []string) int {
+	f, err := parseFlags(argv)
+	if err != nil {
+		return fail(err)
+	}
+	if f.runDir == "" || f.confirm == "" {
+		return fail(fmt.Errorf("restore 需要 --run-dir 与 --confirm"))
+	}
+	res, err := bridge.Restore(f.runDir, f.confirm, logLine, warnLine)
+	if err != nil {
+		return fail(err)
+	}
+	if f.json {
+		return emitJSON(res)
+	}
 	return 0
 }

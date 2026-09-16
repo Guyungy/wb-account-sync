@@ -54,10 +54,10 @@ type Spec struct {
 // Clients 是已知的两个客户端。顺序即 UI 里的左右顺序。
 var Clients = []Spec{
 	{
-		Key:      "wb",
-		Display:  "WorkBuddy",
-		MacApp:   "WorkBuddy.app",
-		WinImage: "WorkBuddy.exe",
+		Key:        "wb",
+		Display:    "WorkBuddy",
+		MacApp:     "WorkBuddy.app",
+		WinImage:   "WorkBuddy.exe",
 		LinuxImage: "workbuddy",
 		HomeCandidates: []string{
 			"~/.workbuddy",
@@ -67,10 +67,10 @@ var Clients = []Spec{
 		Hint: "WorkBuddy 客户端的数据目录",
 	},
 	{
-		Key:      "wb_ai",
-		Display:  "WorkBuddy AI",
-		MacApp:   "WorkBuddy AI.app",
-		WinImage: "WorkBuddy AI.exe",
+		Key:        "wb_ai",
+		Display:    "WorkBuddy AI",
+		MacApp:     "WorkBuddy AI.app",
+		WinImage:   "WorkBuddy AI.exe",
 		LinuxImage: "workbuddy-ai",
 		HomeCandidates: []string{
 			"~/.workbuddy-ai",

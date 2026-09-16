@@ -1,5 +1,38 @@
 # 更新记录
 
+## 未发布 — Go 底座（第二步：执行路径）
+
+把 apply / backup / verify / restore 迁到 Go。Plan 的等价性只证明"两边看数据
+的方式一样"，真正会损坏用户数据的是 apply，所以这一轮的重点全部在**结果可比对**。
+
+- Go 侧新增 `internal/bridge/{apply,backup,restore,verify,fsutil,memory}.go`，
+  CLI 补齐 `apply` / `backup` / `verify` / `restore` 四个子命令，与 Python 版参数同名同义。
+- `apply` 保留了"执行前重新生成计划并比对 plan_id"的漂移检测：计划是某一刻的快照，
+  源侧之后又写入就会**不报错地漏数据**，所以宁可整个拒绝。这个语义两边一致，测试里
+  专门断言了"第二次 apply 在两边都以漂移为由被拒，且拒绝时一个字节都没动"。
+- 数据库写入用 `BEGIN IMMEDIATE`：客户端可能正在后台跑，先拿写锁才能在
+  "发现冲突"和"改了半截"之间留出明确边界。
+- 备份改用 `VACUUM INTO`，不再复制文件：数据库处于 WAL 模式，只拷 `.db` 会丢掉
+  还在 WAL 里的已提交事务——备份看着成功了，恢复出来却少一截。
+- 新增 `internal/pyjson/ordered.go`：保序 JSON 往返。`settings.json` 的渠道绑定合并
+  要**重写用户的配置文件**，而 Go 的 `map[string]any` 会丢键序（"加一条绑定"变成
+  "整份文件重排"）、还会把大整数变成 float64 丢精度。这里保留原始数字文本与键序。
+- `pyjson.Normalize` 加了一层反射兜底：日志记录里随手写的 `[]string`、`map[string]int`
+  以前会让编码器直接 panic——而那是**迁移执行到一半**的时刻，数据库已经写了半截。
+  现在统一折成标准形状，编码器的类型覆盖面不再成为执行路径的软肋。
+- `restore` 明确不负责两件事（与 Python 版一致，且是刻意的）：并集目录
+  （blobs / skills / connectors-skills）里的新增文件不删——这些目录内容寻址，
+  删一个可能影响另一侧已有引用；被合并改写的记忆原文只留 `.before-bridge-*` 备份。
+- 新增 `tests/test_go_apply_parity.py`（8 项）：同一份合成夹具复制成两组互不相干的
+  目录，两边各跑完整 plan → apply → verify → restore，逐项对账数据库内容、
+  文件树内容哈希、记忆文件与 settings.json（时间戳归一化后逐字节比）、
+  备份清单；并单独断言凭据（`.master.key`）绝不跨 home 复制。
+
+已知且**未修**的问题（原样保留以保证两边行为一致，待单独决策）：
+`memory` 合并时正则取的是 `RAW_JSON_START` 之前的内容，会把 `<!--` 这个
+注释起始符留在正文里，导致每次合并都在记忆文件里多出一行残留。
+不臆改是因为它会改变写入用户长期记忆的语义。
+
 ## 未发布 — macOS / Windows 桌面应用
 
 把工具打成各平台的原生应用，用户不需要装 Python，双击图标即用。

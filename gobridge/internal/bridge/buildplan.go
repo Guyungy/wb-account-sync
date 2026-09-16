@@ -42,13 +42,13 @@ func BuildPlan(a, b *Home, options map[string]any) (*Plan, error) {
 	}
 
 	plan := &Plan{
-		Version:     Version,
-		HomeA:       a.Path,
-		HomeB:       b.Path,
-		LabelA:      a.Label,
-		LabelB:      b.Label,
-		UIDA:        uidA,
-		UIDB:        uidB,
+		Version: Version,
+		HomeA:   a.Path,
+		HomeB:   b.Path,
+		LabelA:  a.Label,
+		LabelB:  b.Label,
+		UIDA:    uidA,
+		UIDB:    uidB,
 		// Python 的 strftime("%Y-%m-%dT%H:%M:%S%z") 等价写法。
 		CreatedAt:   time.Now().Format("2006-01-02T15:04:05-0700"),
 		Options:     options,

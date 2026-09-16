@@ -40,21 +40,21 @@ func (e PlanEntry) AsDict() map[string]any {
 
 // Plan 是一份冻结了数据指纹的迁移计划。
 type Plan struct {
-	Version   string
-	HomeA     string
-	HomeB     string
-	LabelA    string
-	LabelB    string
-	UIDA      string
-	UIDB      string
-	CreatedAt string
-	Options   map[string]any
-	Rows      map[string]map[string][]map[string]any
-	Skipped   map[string]map[string]int
+	Version     string
+	HomeA       string
+	HomeB       string
+	LabelA      string
+	LabelB      string
+	UIDA        string
+	UIDB        string
+	CreatedAt   string
+	Options     map[string]any
+	Rows        map[string]map[string][]map[string]any
+	Skipped     map[string]map[string]int
 	Fingerprint map[string]map[string]string
-	Entries   []PlanEntry
-	Summary   map[string]any
-	PlanID    string
+	Entries     []PlanEntry
+	Summary     map[string]any
+	PlanID      string
 }
 
 // Body 是参与 plan_id 计算的正文。**改这里等于改哈希契约**，
