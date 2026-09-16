@@ -90,6 +90,15 @@ def _selftest() -> int:
         report["clients_error"] = f"{exc.__class__.__name__}: {exc}"
         report["ok"] = False
 
+    # pywebview 决定能不能开自带窗口。缺了它不算致命（会退回浏览器），
+    # 但界面上"跳浏览器"还是"自带窗口"完全取决于这一项，必须能看见。
+    try:
+        import webview  # noqa: F401
+
+        report["webview"] = "ok"
+    except Exception as exc:
+        report["webview"] = f"MISSING: {exc.__class__.__name__}: {exc}"
+
     sys.stdout.write(_json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     sys.stdout.flush()
     return 0 if report["ok"] else 1
@@ -178,6 +187,14 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             _report("自检失败。", traceback.format_exc())
             return 1
+
+    # 打包版默认用**自己的窗口**显示界面，不再往外跳浏览器——用户双击图标
+    # 就该看到一个应用窗口，而不是"浏览器被打开了一个标签页"。想回到旧行为
+    # 加 --no-window（wb_ui 不认识这个参数，所以在这里消化掉）。
+    if "--no-window" in args:
+        args.remove("--no-window")
+    elif "--window" not in args:
+        args.append("--window")
 
     try:
         import wb_ui

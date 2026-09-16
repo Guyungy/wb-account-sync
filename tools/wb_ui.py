@@ -1136,6 +1136,41 @@ def _startup_open(url: str) -> None:
         pass
 
 
+def open_window(url: str, title: str = "跨 App 数据目录打通") -> bool:
+    """用系统自带的 WebView 开一个**属于本应用自己的窗口**。
+
+    界面仍然是那个本地页面，但不再往外跳浏览器：macOS 走 WKWebView、
+    Windows 走 WebView2，都是系统组件，不用额外装运行时。
+
+    必须在**主线程**调用——Cocoa 的窗口只能在主线程创建，所以 HTTP 服务
+    要挪到后台线程去跑（见 ``main``）。
+
+    返回 ``True``：窗口确实开起来了（函数阻塞到用户关掉它）。
+    返回 ``False``：**没能开窗**，调用方应退回浏览器。
+    两种情况要分清楚——否则建窗失败时用户会对着空气发呆。
+    """
+    try:
+        import webview
+    except Exception:
+        return False
+    try:
+        webview.create_window(title, url, width=1120, height=800,
+                              min_size=(880, 600))
+    except Exception:
+        return False
+
+    # 窗口真起来了才会回调。某些环境（没有 GUI 会话、远程 shell）下
+    # ``start()`` 会二话不说直接返回——那**不能**当成"窗口正常关闭"，
+    # 否则用户看到的就是一闪而过、或者干脆什么都没有，又回到
+    # "双击没反应"。确认没起来就返回 False，让调用方退回浏览器。
+    shown: list[bool] = []
+    try:
+        webview.start(lambda *a: shown.append(True))
+    except Exception:
+        pass
+    return bool(shown)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="wb-ui",
@@ -1149,6 +1184,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=0, help="监听端口，默认自动分配")
     parser.add_argument("--token", default=None,
                         help="显式指定访问 token（原生 .app 外壳用；默认每次启动随机生成）")
+    parser.add_argument("--window", action="store_true",
+                        help="用应用自己的窗口显示界面（需要 pywebview）；不可用时退回浏览器")
     parser.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
     parser.add_argument("--handshake", action="store_true",
                         help="就绪后向 stdout 输出一行 WBUI_READY {json}，供宿主程序读取")
@@ -1190,6 +1227,25 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.flush()
     except BrokenPipeError:
         pass
+
+    if args.window:
+        # 窗口只能在主线程建（Cocoa 的硬性要求），HTTP 服务挪到后台线程。
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        if open_window(url):
+            print("窗口已关闭。")
+            httpd.server_close()
+            return 0
+        # 开窗失败：别让用户对着空气发呆，退回浏览器。
+        print("原生窗口不可用，改用浏览器打开。")
+        if not args.no_open:
+            _startup_open(url)
+        try:
+            threading.Event().wait()  # 服务已在后台线程跑，主线程挂着等 Ctrl-C
+        except KeyboardInterrupt:
+            print("\n已停止。")
+        finally:
+            httpd.server_close()
+        return 0
 
     if not args.no_open:
         threading.Timer(0.4, lambda: _startup_open(url)).start()

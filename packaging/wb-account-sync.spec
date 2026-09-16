@@ -19,6 +19,8 @@ Windows 的 ``.exe`` 只能在 Windows 上构建 —— 两个平台各自跑一
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_all
+
 ROOT = Path(SPECPATH).resolve().parent          # noqa: F821  SPECPATH 由 PyInstaller 注入
 TOOLS = ROOT / "tools"
 
@@ -45,18 +47,29 @@ HIDDEN_IMPORTS = [
     "wb_home_bridge",
     "wb_platform",
     "wb_autosync",
+    "webview",
 ]
 
-# tkinter 是最大的一块无用体积（约 15 MB），本项目全程零依赖、界面在浏览器里，
-# 直接剔掉。unittest 同理，只服务于源码仓库里的测试。
+# pywebview 的后端是**按平台动态挑**的，静态分析同样追不到。
+# 少了它的后果和漏打 wb_ui 一样：窗口开不出来，只能退回浏览器。
+if IS_MAC:
+    HIDDEN_IMPORTS.append("webview.platforms.cocoa")
+elif IS_WIN:
+    HIDDEN_IMPORTS.append("webview.platforms.edgechromium")
+
+# pywebview 还带 js 注入脚本等数据文件，交给 collect_all 一网打尽。
+WEBVIEW_DATAS, WEBVIEW_BINARIES, WEBVIEW_HIDDEN = collect_all("webview")
+
+# tkinter 是最大的一块无用体积（约 15 MB），本项目界面走 WebView（macOS
+# WKWebView / Windows WebView2），用不到它。unittest 只服务于源码仓库里的测试。
 EXCLUDES = ["tkinter", "unittest", "pydoc", "doctest"]
 
 a = Analysis(  # noqa: F821
     [str(TOOLS / "app_main.py")],
     pathex=[str(TOOLS)],
-    binaries=[],
-    datas=[],
-    hiddenimports=HIDDEN_IMPORTS,
+    binaries=WEBVIEW_BINARIES,
+    datas=WEBVIEW_DATAS,
+    hiddenimports=HIDDEN_IMPORTS + WEBVIEW_HIDDEN,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
