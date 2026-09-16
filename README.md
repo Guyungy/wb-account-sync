@@ -8,7 +8,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/version-0.2.0a1-blue" alt="version">
   <img src="https://img.shields.io/badge/python-3.10+-3776ab?logo=python&logoColor=white" alt="python">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
+  <img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="license">
 </p>
 
 <p align="center">
@@ -169,4 +169,17 @@ python3 tools/synth_check.py
 - 客户端私有存储协议、界面展示和云同步行为尚未经过正式兼容认证。
 - 0.2.0a1 是安全预览版，不是生产稳定版。不要在不可替代的数据上首次运行。
 
-**MIT License** — 详见 [`LICENSE`](LICENSE)。
+### 许可证
+
+**GNU General Public License v3.0 or later**（GPL-3.0-or-later）
+
+Copyright (C) 2026 Guyungy
+
+本程序是自由软件：你可以依据自由软件基金会发布的 GNU 通用公共许可证条款
+（许可证第 3 版，或你选择的任何更新版本）重新分发和/或修改它。
+
+本程序分发的目的是希望它有用，但不提供任何担保，甚至不包含适销性或
+特定用途适用性的默示担保。详见 [GNU 通用公共许可证](LICENSE)。
+
+> 采用 GPL 意味着：**衍生作品必须以相同许可证开源**。如果你需要闭源商用，
+> 请联系作者另行授权。

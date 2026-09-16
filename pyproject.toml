@@ -8,7 +8,7 @@ version = "0.2.0a1"
 description = "Offline, explicitly confirmed WorkBuddy session ownership migration safety preview"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 authors = [{name = "wb-account-sync contributors"}]
 classifiers = [

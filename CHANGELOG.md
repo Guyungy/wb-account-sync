@@ -1,5 +1,19 @@
 # 更新记录
 
+## 未发布 — 许可证变更为 GPL-3.0-or-later
+
+- **许可证从 MIT 改为 GNU GPL v3.0 或更新版本**（`GPL-3.0-or-later`）。
+  `LICENSE` 替换为 GPL-3.0 官方全文；`pyproject.toml` 的 `license` 同步更新，
+  README 增加版权与授权说明。
+  - 影响：衍生作品需以相同许可证开源。若需闭源商用，需另行取得授权。
+  - 说明：此前已按 MIT 发布的版本（历史提交）仍可依 MIT 使用，本次变更仅对之后版本生效。
+- 新增 `tools/ui.command`：macOS 双击启动浏览器界面，自动探测 Python 3.10+。
+- `tools/wb_ui.py` 新增 `--token` 与 `--handshake`（就绪后向 stdout 输出一行
+  `WBUI_READY {json}`，供宿主程序解析）。
+- 去敏：移除文档与脚本中的本机绝对路径，改为 `$HOME` 与自动探测。
+- README 重写：徽章、界面截图、目录、快速开始、安全模型。
+- `.gitignore` 忽略项目级 `.workbuddy/`。
+
 ## 未发布 — 跨 App 数据目录打通（实验）
 
 与主 CLI 互相独立的另一条路径，针对"两个独立客户端各用一个 home"的场景。
