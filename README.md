@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.2.0a1-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.3.0a1-blue" alt="version">
   <img src="https://img.shields.io/badge/python-3.10+-3776ab?logo=python&logoColor=white" alt="python">
   <img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="license">
 </p>
@@ -151,7 +151,7 @@ python3 tools/wb_autosync.py uninstall  # 卸载（保留日志与历史运行�
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-python3 -m pip install --no-index --no-deps ./wb_account_sync-0.2.0a1-py3-none-any.whl
+python3 -m pip install --no-index --no-deps ./wb_account_sync-0.3.0a1-py3-none-any.whl
 wb-account-sync --version
 ```
 
@@ -198,7 +198,7 @@ python3 tools/autosync_check.py   # 自动同步层端到端（10 项）
 - 本项目非官方，与 WorkBuddy 及其厂商无关联。
 - 仅用于你本人拥有完整管理权限的账户和数据。
 - 客户端私有存储协议、界面展示和云同步行为尚未经过正式兼容认证。
-- 0.2.0a1 是安全预览版，不是生产稳定版。不要在不可替代的数据上首次运行。
+- 0.3.0a1 是安全预览版，不是生产稳定版。不要在不可替代的数据上首次运行。
 
 ### 许可证
 

@@ -1,6 +1,11 @@
 # 更新记录
 
-## 未发布 — 自动同步（机会式 launchd 代理）
+## 0.3.0a1 — 2026-09-16
+
+首个公开发布版（Alpha）。在 0.2.0a1 的基础上保持范围收紧，新增跨 App 数据目录打通
+与机会式自动同步。**不是生产稳定版**，请勿在不可替代的数据上首次运行。
+
+### 自动同步（机会式 launchd 代理）
 
 - 新增 `tools/wb_autosync.py`：跨 App 双 home 的**机会式自动同步**。
   - 只支持 macOS 的 `install` / `uninstall` / `status` / `pause` / `resume` / `run-now`
@@ -17,7 +22,7 @@
   会话数、回滚命令。
 - 更新 `docs/HOME_BRIDGE.md`、`README.md`、界面截图 `docs/images/ui.png`。
 
-## 未发布 — 许可证变更为 GPL-3.0-or-later
+### 许可证变更为 GPL-3.0-or-later
 
 - **许可证从 MIT 改为 GNU GPL v3.0 或更新版本**（`GPL-3.0-or-later`）。
   `LICENSE` 替换为 GPL-3.0 官方全文；`pyproject.toml` 的 `license` 同步更新，
@@ -31,7 +36,7 @@
 - README 重写：徽章、界面截图、目录、快速开始、安全模型。
 - `.gitignore` 忽略项目级 `.workbuddy/`。
 
-## 未发布 — 跨 App 数据目录打通（实验）
+### 跨 App 数据目录打通（实验）
 
 与主 CLI 互相独立的另一条路径，针对"两个独立客户端各用一个 home"的场景。
 
@@ -60,7 +65,7 @@
 - `wb_home_bridge.py` 默认 home 改为按平台自动探测，进程检测与退出指引改用 `wb_platform`。
 - 文档：`docs/HOME_BRIDGE.md`。
 
-## 未发布 — 共享需求预览与隔离演练
+### 共享需求预览与隔离演练
 
 - 新增 `demo`：三个纯虚拟账号的十项只读断言，不访问真实账号，不模拟客户端写回成功。
 - 新增 `share-preview`：显式账号的普通会话并集、原始归属、排除数量与账号绑定元数据提醒。不能传给迁移执行器。

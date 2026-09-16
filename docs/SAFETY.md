@@ -1,6 +1,6 @@
 # Safety contract
 
-**0.2.0a1 is an alpha safety preview, not production-ready.** These are gates, not completed validation.
+**0.3.0a1 is an alpha safety preview, not production-ready.** These are gates, not completed validation.
 Only migrate accounts/data you personally have authority to migrate.
 This unofficial tool depends on private client storage; client/cloud effects are unverified.
 

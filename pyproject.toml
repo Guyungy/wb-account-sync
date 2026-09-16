@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wb-account-sync"
-version = "0.2.0a1"
+version = "0.3.0a1"
 description = "Offline, explicitly confirmed WorkBuddy session ownership migration safety preview"
 readme = "README.md"
 requires-python = ">=3.10"

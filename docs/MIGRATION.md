@@ -1,6 +1,6 @@
 # Migration from the legacy tool
 
-**Target: 0.2.0a1 safety preview, not a production upgrade.**
+**Target: 0.3.0a1 safety preview, not a production upgrade.**
 A manual transition from broad live sync to narrow offline ownership changes, not reversal of all legacy effects.
 It cannot certify historical credential isolation. Only migrate accounts/data you personally have authority over.
 
