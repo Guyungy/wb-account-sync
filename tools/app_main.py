@@ -171,6 +171,10 @@ def main(argv: list[str] | None = None) -> int:
     if "--selftest" in args:
         try:
             return _selftest()
+        except BrokenPipeError:
+            # 下游把管道关了，例如 `--selftest | grep '"ok"'`（grep 找到就退）。
+            # 这不是自检失败：弹错误框会吓人，退出码变 1 更会让 CI 误判。
+            return 0
         except Exception:
             _report("自检失败。", traceback.format_exc())
             return 1
@@ -180,6 +184,10 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:
         _report("界面模块导入失败。", traceback.format_exc())
         return 1
+
+    # 把原生弹窗交给界面层。自动打开浏览器失败时，这是唯一还能告诉用户
+    # "服务在跑、地址是什么"的通道——窗口模式下看不到 stdout。
+    wb_ui.NOTIFY_HOOK = _notify_native
 
     try:
         code = wb_ui.main(args)
@@ -194,6 +202,10 @@ def main(argv: list[str] | None = None) -> int:
         return code
     except KeyboardInterrupt:
         return 130
+    except BrokenPipeError:
+        # 同 selftest：下游关管道是正常用法（`... --handshake | head -1`），
+        # 不该被弹成"界面异常退出"。
+        return 0
     except Exception:
         _report("界面异常退出。", traceback.format_exc())
         return 1

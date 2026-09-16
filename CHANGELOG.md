@@ -39,6 +39,16 @@
     其余平台退回 `webbrowser`，再不行用 `os.startfile` / `xdg-open`。
   - 新增 `docs/DESKTOP_APP.md`：下载方式、首次放行（Gatekeeper / SmartScreen）、
     平台功能对照、自行构建与已知限制。
+  - **自动开浏览器失败时亮出地址**：打包版没有终端，带 token 的地址只打印在
+    stdout 里——浏览器一旦没弹出来，用户既看不到界面也拿不到地址，现象和
+    "双击没反应"一模一样。现在新增 `NOTIFY_HOOK` 注入点，`app_main.py` 把
+    原生弹窗（macOS `osascript` / Windows `MessageBoxW`）交给界面层，
+    失败时把完整 URL 摆在用户面前让他自己复制。命令行运行不注入钩子，
+    保持静默（终端里本来就看得见地址）。
+  - **修复 `BrokenPipeError` 被误报成失败**：`--selftest | grep '"ok"'` 这类
+    下游提前关管道的正常用法，此前会走进 `except Exception`，被弹成
+    "自检失败"、退出码变 1——CI 因此误判为构建失败。现在 `--selftest`
+    与界面主流程都单独吞掉 `BrokenPipeError`。
 - **Windows 侧仍未在真机验证**：数据目录候选（`%APPDATA%\WorkBuddy` 等）与
   客户端进程名（`WorkBuddy.exe`）都是推断值。文档已把"先用任务管理器核对进程名"
   列为 Windows 首次使用的前置检查——进程名对不上会导致"客户端在运行却显示已退出"，

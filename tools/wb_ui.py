@@ -1064,6 +1064,11 @@ def build_state(args: argparse.Namespace) -> UiState:
     )
 
 
+# 打包入口（app_main）会把它设成原生弹窗函数。命令行运行时保持 None：
+# 终端里本来就打印了地址，再弹个框是打扰。
+NOTIFY_HOOK = None
+
+
 def _spawn(argv: list[str], timeout: float = 10.0) -> bool:
     """跑一条外部命令，只看它成不成功。超时或命令不存在都算失败。
 
@@ -1106,6 +1111,29 @@ def open_browser(url: str) -> bool:
         return _spawn(["xdg-open", url])
     except Exception:
         return False
+
+
+def _startup_open(url: str) -> None:
+    """启动后自动开浏览器。**失败时务必把地址摊给用户**。
+
+    打包版没有终端，而带 token 的地址只打印在 stdout 里——浏览器一旦没打开，
+    用户既看不到界面、也拿不到地址，现象和"双击没反应"完全一样。
+    所以这里在失败时调宿主注入的原生弹窗，把 URL 亮出来让用户自己复制。
+    """
+    if open_browser(url):
+        return
+    hook = NOTIFY_HOOK
+    if hook is None:
+        return
+    try:
+        hook(
+            "wb-account-sync",
+            "服务已经启动，但没能自动打开浏览器。\n\n"
+            "请把下面这个地址复制到浏览器打开（其中包含本次访问的令牌，"
+            "少了它打不开数据）：\n\n" + url,
+        )
+    except Exception:
+        pass
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1156,11 +1184,15 @@ def main(argv: list[str] | None = None) -> int:
             ensure_ascii=False,
         ))
     # 输出被重定向到文件时 Python 会用块缓冲，这里必须主动刷出，
-    # 否则用户从日志里拿不到带 token 的地址。
-    sys.stdout.flush()
+    # 否则用户从日志里拿不到带 token 的地址。管道被下游关掉（例如
+    # `--handshake | head -1`）不算错误，服务该继续跑。
+    try:
+        sys.stdout.flush()
+    except BrokenPipeError:
+        pass
 
     if not args.no_open:
-        threading.Timer(0.4, lambda: open_browser(url)).start()
+        threading.Timer(0.4, lambda: _startup_open(url)).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
