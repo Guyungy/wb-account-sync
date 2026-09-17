@@ -13,6 +13,7 @@ venv/
 dist/
 dist-*/
 build/
+build-*/
 outputs/
 .coverage
 htmlcov/
