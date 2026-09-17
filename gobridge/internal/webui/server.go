@@ -170,6 +170,10 @@ func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 		s.apiSurvey(w)
 	case "/api/apply":
 		s.apiApply(w, r)
+	case "/api/accounts":
+		// 账号面板目前只有 Python 实现提供。显式回 501 而不是 404，
+		// 前端才能把"这个实现没有"和"接口写错了"区分开。
+		sendError(w, "账号与用量面板目前只有 Python 实现提供，请用 python3 tools/wb_ui.py 启动。", 501)
 	default:
 		sendError(w, "未知端点 "+path, 404)
 	}

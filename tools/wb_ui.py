@@ -30,6 +30,7 @@ import secrets
 import socket
 import sys
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable
@@ -39,6 +40,7 @@ _TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
 
+import acct_probe  # noqa: E402  同目录模块，只读账号扫描
 import wb_home_bridge as bridge  # noqa: E402  同目录模块
 import wb_platform  # noqa: E402
 
@@ -50,6 +52,51 @@ IS_FROZEN = bool(getattr(sys, "frozen", False))
 DEFAULT_STATE_DIR = "~/.wb-home-bridge"
 # 自动同步代理的状态根默认与界面状态目录一致，但可用 WB_AUTOSYNC_ROOT 单独指向
 DEFAULT_AUTOSYNC_ROOT = "~/.wb-home-bridge"
+# 账号面板的缓存时长（秒）。扫描要开数据库 + 采样日志，一次约 1 秒，
+# 用户在面板上连点几次不该跑几遍。
+ACCOUNTS_CACHE_TTL = 15.0
+
+
+# --------------------------------------------------------------------------
+# 账号扫描（只读）
+# --------------------------------------------------------------------------
+
+
+def accounts_report(state: "UiState", days: int = 14, refresh: bool = False) -> dict[str, Any]:
+    """汇总两个 home 的账号与用量。纯只读：只开 sqlite 的 ``mode=ro`` 并读文件。"""
+    days = max(7, min(int(days), 180))
+    with state.accounts_lock:
+        cached = state.accounts_cache
+        if cached and not refresh and cached[1] == days:
+            if time.time() - cached[0] < ACCOUNTS_CACHE_TTL:
+                payload = dict(cached[2])
+                payload["cached"] = True
+                return payload
+        homes = []
+        reports = []
+        for home in (state.home_a, state.home_b):
+            report = acct_probe.build(home.path, home.label, with_logs=True)
+            info = acct_probe.to_dict(report, days=days)
+            info["key"] = home.slug
+            homes.append(info)
+            reports.append(report)
+        merged = acct_probe.merge_reports(reports)
+        payload = {
+            "homes": homes,
+            "merged": merged,
+            "days": days,
+            "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "cached": False,
+            "totals": {
+                "accounts": sum(h["totals"]["accounts"] for h in homes),
+                "credits_used": round(
+                    sum(h["totals"]["credits_used"] for h in homes), 2
+                ),
+                "sessions": sum(h["totals"]["sessions"] for h in homes),
+            },
+        }
+        state.accounts_cache = (time.time(), days, payload)
+        return payload
 
 
 # --------------------------------------------------------------------------
@@ -76,6 +123,9 @@ class UiState:
         self.plan_doc: dict[str, Any] | None = None
         self.last_run_code: int | None = None
         self.busy = threading.Lock()
+        # 账号扫描要读数据库 + 采样日志，一次约 1 秒，不适合每次点击都重跑
+        self.accounts_cache: tuple[float, int, dict[str, Any]] | None = None
+        self.accounts_lock = threading.Lock()
 
     def home_for(self, key: str) -> bridge.Home:
         return self.home_a if key == "wb" else self.home_b
@@ -235,6 +285,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if url.path == "/api/state":
                 self._send_json(self._api_state())
+            elif url.path == "/api/accounts":
+                self._send_json(self._api_accounts(qs))
             elif url.path == "/api/survey":
                 self._api_survey()
             elif url.path == "/api/apply":
@@ -290,6 +342,15 @@ class Handler(BaseHTTPRequestHandler):
             "last_run_code": st.last_run_code,
             "autosync": autosync_status(st.autosync_root),
         }
+
+    def _api_accounts(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """账号与用量面板的数据源。只读，绝不写任何客户端数据。"""
+        try:
+            days = int((qs.get("days") or ["14"])[0])
+        except (TypeError, ValueError):
+            days = 14
+        refresh = (qs.get("refresh") or ["0"])[0] in ("1", "true", "yes")
+        return accounts_report(self.state, days=days, refresh=refresh)
 
     def _api_survey(self) -> None:
         st = self.state
@@ -626,12 +687,51 @@ details.card[open] > summary::before { content: "▾"; }
 .card.sub + .card.sub { margin-top: 22px; }
 #quick-progress:empty { display: none; }
 #quick-progress .gate { margin: 8px 0 0; }
+
+/* ---- 账号与用量面板 ---- */
+.acct-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+.acct-box { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.acct-box .who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.acct-box .who strong { font-size: 15px; font-weight: 500; word-break: break-all; }
+.acct-box .uid { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--muted); }
+.acct-stats { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
+.acct-stats div { font-size: 12px; color: var(--muted); }
+.acct-stats b { display: block; font-size: 16px; font-weight: 500; color: var(--text);
+                font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; border-radius: 5px; padding: 1px 6px; font-size: 11px;
+       background: var(--code); color: var(--muted); margin-right: 4px; }
+.tag.on { background: var(--accent-soft); color: var(--accent); }
+table.acct td.mono, table.acct th.mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+table.acct tr.cur td { background: var(--accent-soft); }
+table.acct td .dim { color: var(--faint); }
+.chart { display: flex; align-items: flex-end; gap: 3px; height: 110px; margin: 10px 0 4px; }
+.chart .col { flex: 1 1 0; display: flex; align-items: flex-end; gap: 1px; height: 100%;
+              min-width: 0; }
+.chart .col .bar { flex: 1 1 0; border-radius: 2px 2px 0 0; min-height: 2px; }
+.chart .col .bar.a { background: var(--accent); }
+.chart .col .bar.b { background: var(--ok); }
+.chart .col.empty .bar { background: var(--line); min-height: 2px; }
+.chart-x { display: flex; gap: 3px; font-size: 10px; color: var(--faint); }
+.chart-x span { flex: 1 1 0; text-align: center; min-width: 0; overflow: hidden; white-space: nowrap; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
+.notice { border-radius: 8px; padding: 10px 12px; font-size: 12.5px; margin-top: 12px;
+          background: var(--warn-soft); color: var(--warn); }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>跨 App 数据目录打通</h1>
   <p class="lead">把 WorkBuddy 与 WorkBuddy AI 的历史会话、记忆、技能互相补全。只新增，不覆盖已有数据。</p>
+
+  <div class="card">
+    <h2>账号与用量</h2>
+    <div id="accounts-body" class="hint">正在读取本机账号…</div>
+    <div class="actions">
+      <button id="btn-accounts">重新读取</button>
+      <span class="hint" id="accounts-status"></span>
+    </div>
+  </div>
 
   <div class="card">
     <h2>一键同步</h2>
@@ -780,7 +880,11 @@ async function api(path, opts) {
   const text = await res.text();
   let data = {};
   try { data = text ? JSON.parse(text) : {}; } catch (e) { data = { error: text }; }
-  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  if (!res.ok) {
+    const err = new Error(data.error || ('HTTP ' + res.status));
+    err.status = res.status;   // 调用方要靠状态码区分"不支持"和"真出错"
+    throw err;
+  }
   return data;
 }
 
@@ -1162,6 +1266,200 @@ $('btn-quick').onclick = async () => {
   }
 };
 
+// ---- 账号与用量面板 ----
+
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const fmtNum = (n) => (n == null ? '-' : Number(n).toLocaleString('zh-CN'));
+const fmtCredits = (n) => (n == null ? '-' : Number(n).toLocaleString('zh-CN',
+  { maximumFractionDigits: 1 }));
+
+function accountName(a) {
+  if (!a) return '未识别';
+  return a.nickname || a.uid_short;
+}
+
+// 一个 home 的当前账号摘要
+function currentAccountBox(h) {
+  const cur = (h.accounts || []).find((a) => a.is_current);
+  const bits = [];
+  if (cur) {
+    if (cur.type) bits.push(cur.type);
+    if (cur.edition) bits.push(cur.edition);
+    if (cur.is_pro) bits.push('Pro');
+    if (cur.enterprise_id) bits.push('企业');
+  }
+  const t = h.totals || {};
+  return `<div class="acct-box">
+    <div class="who">
+      <strong>${esc(accountName(cur))}</strong>
+      ${cur ? '<span class="pill ok"><i class="dot"></i>当前登录</span>'
+            : '<span class="pill bad">未识别</span>'}
+    </div>
+    <div class="uid">${esc(h.name)} · ${esc(h.path)}</div>
+    ${cur ? `<div class="kv"><span>uid</span><span class="mono">${esc(cur.uid)}</span></div>` : ''}
+    ${bits.length ? `<div class="kv"><span>类型</span><span>${esc(bits.join(' / '))}</span></div>` : ''}
+    ${cur ? `<div class="kv"><span>快照</span><span>${esc(h.snapshot_at)}（${esc(h.snapshot_age)}）</span></div>` : ''}
+    <div class="acct-stats">
+      <div><b>${fmtNum(t.sessions)}</b>会话</div>
+      <div><b>${fmtNum(t.automations)}</b>自动化</div>
+      <div><b>${fmtCredits(t.credits_used)}</b>累计积分</div>
+      <div><b>${fmtNum(t.accounts)}</b>账号</div>
+    </div>
+    <div class="hint" style="margin-top:8px">以上都是<b>这个客户端内</b>的记录；
+    两个客户端有重叠会话，合计数字见下方「整机口径」。</div>
+  </div>`;
+}
+
+// 账号明细表：本机出现过的所有账号，含已切换走的
+function accountTable(h) {
+  const rows = (h.accounts || []).map((a) => {
+    const tags = [];
+    if (a.has_memory) tags.push('<span class="tag on">记忆</span>');
+    if (a.has_connectors) tags.push('<span class="tag">连接器</span>');
+    if (a.has_personal_storage) tags.push('<span class="tag">存储</span>');
+    if (a.automations) tags.push(`<span class="tag">自动化 ${a.automations}</span>`);
+    if (a.channels && a.channels.length) tags.push(`<span class="tag on">${esc(a.channels.join('/'))}</span>`);
+    const name = a.nickname
+      ? esc(a.nickname)
+      : '<span class="dim">—</span>';
+    return `<tr class="${a.is_current ? 'cur' : ''}">
+      <td class="mono">${a.is_current ? '★ ' : ''}${esc(a.uid_short)}</td>
+      <td>${name}</td>
+      <td class="num">${fmtNum(a.sessions)}</td>
+      <td class="num">${fmtCredits(a.credits_used)}</td>
+      <td>${esc(a.last_session || '-')}</td>
+      <td>${tags.join('') || '<span class="dim">—</span>'}</td>
+    </tr>`;
+  }).join('');
+  const unnamed = (h.accounts || []).filter((a) => !a.nickname).length;
+  const stale = (h.accounts || []).filter((a) => !a.is_current && a.sessions).length;
+  return `<table class="acct">
+    <thead><tr>
+      <th class="mono">uid</th><th>账号</th>
+      <th style="text-align:right">会话</th><th style="text-align:right">累计积分</th>
+      <th>最后活动</th><th>本机资产</th>
+    </tr></thead>
+    <tbody>${rows || '<tr><td colspan="6" class="dim">没有读到账号</td></tr>'}</tbody>
+  </table>
+  ${stale ? `<div class="hint">有 ${stale} 个账号不是当前登录的，但名下的会话还留在本机。
+    想让它们出现在当前账号下，用下面的「一键同步」（同一客户端内改归属那一档）。</div>` : ''}
+  ${unnamed ? `<div class="hint">有 ${unnamed} 个账号昵称为「—」：客户端只给当前账号
+  记昵称，切换走之后本机就不再留名字了，只能靠 uid 区分。</div>` : ''}`;
+}
+
+// 近 N 天用量柱状图：同一天两个 home 并排
+function renderTrend(homes) {
+  const series = (homes[0] || {}).trend || [];
+  if (!series.length) return '';
+  const values = series.map((_, i) => homes.reduce(
+    (sum, h) => sum + (((h.trend || [])[i] || {}).credits || 0), 0));
+  const max = Math.max(1, ...values);
+  const cols = series.map((point, i) => {
+    const bars = homes.map((h) => {
+      const v = ((h.trend || [])[i] || {}).credits || 0;
+      const cls = h.key === 'wb' ? 'a' : 'b';
+      return v ? `<div class="bar ${cls}" style="height:${Math.max(2, v / max * 100).toFixed(1)}%"></div>`
+               : `<div class="bar ${cls}" style="height:0"></div>`;
+    }).join('');
+    const tip = `${point.date}｜` + homes.map((h) => {
+      const v = ((h.trend || [])[i] || {}).credits || 0;
+      return `${h.name} ${fmtCredits(v)}`;
+    }).join('　') + `｜合计 ${fmtCredits(values[i])}`;
+    return `<div class="col ${values[i] ? '' : 'empty'}" title="${esc(tip)}">${bars}</div>`;
+  }).join('');
+  const label = series.map((point, i) => (
+    `<span>${i % 5 === 0 || i === series.length - 1 ? point.date.slice(5) : ''}</span>`
+  )).join('');
+  return `<div class="chart">${cols}</div><div class="chart-x">${label}</div>
+    <div class="legend">
+      ${homes.map((h) => `<span><i style="background:var(${h.key === 'wb' ? '--accent' : '--ok'})"></i>${esc(h.name)}</span>`).join('')}
+      <span>柱子是各客户端自己的记录，同一会话被同步到两边时当天会各计一次</span>
+    </div>`;
+}
+
+// 跨客户端去重后的整机视角
+function mergedTable(d) {
+  const m = d.merged || {};
+  const rows = (m.accounts || []).map((a) => `<tr>
+      <td class="mono">${esc(a.uid_short)}</td>
+      <td>${a.nickname ? esc(a.nickname) : '<span class="dim">昵称未留痕</span>'}</td>
+      <td class="num">${fmtCredits(a.credits_used)}</td>
+      <td class="num">${fmtNum(a.sessions)}</td>
+      <td>${(a.homes || []).map((n) => `<span class="tag on">${esc(n)}</span>`).join('')}</td>
+    </tr>`).join('');
+  return `<div class="hint">同一个会话被同步到另一个客户端后会在两边各存一份
+    （顺带把归属改写成目标账号）。直接相加会把同一笔消耗算两遍——
+    本机有 <b>${fmtNum(m.duplicated_sessions)}</b> 条记录属于这种情况，
+    所以下面这张表按 session 去重，才是整机的真实消耗。</div>
+    <table class="acct" style="margin-top:10px">
+      <thead><tr>
+        <th class="mono">uid</th><th>账号</th>
+        <th style="text-align:right">整机累计积分</th>
+        <th style="text-align:right">会话</th>
+        <th>出现于</th>
+      </tr></thead>
+      <tbody>${rows || '<tr><td colspan="5" class="dim">没有用量记录</td></tr>'}</tbody>
+    </table>`;
+}
+
+function renderAccounts(d) {
+  const homes = d.homes || [];
+  const merged = d.merged || {};
+  const days = d.days || 30;
+  let html = `<div class="acct-grid">${homes.map(currentAccountBox).join('')}</div>`;
+  html += `<div class="sep"></div>
+    <div class="hint">整机去重后：累计积分消耗 <b>${fmtCredits(merged.credits_used)}</b>，
+    会话 <b>${fmtNum(merged.sessions)}</b> 条，涉及 <b>${fmtNum((merged.accounts || []).length)}</b> 个账号。</div>`;
+  homes.forEach((h) => {
+    html += `<div class="sep"></div>
+      <div class="host">${esc(h.name)} · 该客户端内的账号</div>
+      ${accountTable(h)}
+      ${(h.errors || []).map((e) => `<div class="hint" style="color:var(--warn)">! ${esc(e)}</div>`).join('')}`;
+  });
+  html += `<div class="sep"></div>
+    <div class="host">整机口径（跨客户端去重）</div>
+    ${mergedTable(d)}`;
+  html += `<div class="sep"></div>
+    <div class="host">近 ${days} 天积分消耗</div>
+    ${renderTrend(homes) || '<div class="hint">没有读到用量记录。</div>'}
+    <div class="notice"><b>关于「剩余积分」：</b>本机磁盘不缓存余额，本地只能算出
+    <b>已消耗</b>总量。剩余额度唯一来源是实时接口
+    <span class="mono">billing/meter/get-user-resource-summary</span>，
+    它要的 access token 只活在客户端主进程内存里，不落盘、不写钥匙串。
+    要知道还剩多少，请打开客户端看账户页。</div>
+    <div class="hint">读取时间 ${esc(d.generated_at)}${d.cached ? '（命中缓存）' : ''} ·
+    全程只读，未写入任何客户端数据。</div>`;
+  $('accounts-body').innerHTML = html;
+}
+
+async function loadAccounts(refresh) {
+  const btn = $('btn-accounts');
+  let unsupported = false;   // finally 里要用，不能只在 catch 里声明
+  btn.disabled = true;
+  $('accounts-status').textContent = '读取中…';
+  try {
+    const q = '/api/accounts' + (refresh ? '?refresh=1' : '');
+    renderAccounts(await api(q));
+    $('accounts-status').textContent = '';
+    btn.textContent = '重新读取';
+  } catch (e) {
+    // Go 版目前没有这个端点（501/404）。这不是故障，别把用户吓一跳。
+    unsupported = e.status === 501 || e.status === 404;
+    $('accounts-body').innerHTML = unsupported
+      ? `<div class="gate warn">当前这个实现还没有账号面板。
+         Python 版（<span class="mono">python3 tools/wb_ui.py</span>）里可以看账号与用量。</div>`
+      : '<div class="gate bad">读取失败：' + esc(e.message) + '</div>';
+    $('accounts-status').textContent = '';
+    btn.textContent = unsupported ? '重新读取' : '重试';
+  } finally {
+    btn.disabled = unsupported;
+  }
+}
+
+$('btn-accounts').onclick = () => loadAccounts(true);
+
 $('btn-survey').onclick = async () => {
   const btn = $('btn-survey');
   btn.disabled = true; btn.textContent = '读取中…';
@@ -1270,6 +1568,8 @@ $('btn-restore').onclick = async () => {
 renderOptions();
 refreshState();
 setInterval(refreshState, 2000);
+// 账号面板要开库 + 采样日志，约 1 秒，异步跑，不挡页面其余部分
+loadAccounts(false);
 </script>
 </body>
 </html>

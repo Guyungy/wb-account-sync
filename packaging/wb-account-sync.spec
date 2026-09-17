@@ -47,6 +47,8 @@ HIDDEN_IMPORTS = [
     "wb_home_bridge",
     "wb_platform",
     "wb_autosync",
+    # 账号面板的扫描引擎：wb_ui 在运行时按 sys.path 导入它，静态分析追不到
+    "acct_probe",
     "webview",
 ]
 
