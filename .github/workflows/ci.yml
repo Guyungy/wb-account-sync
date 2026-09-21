@@ -51,8 +51,35 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Run Rust tests
         run: cargo test --workspace --locked
+  # 前端（TypeScript）。同样不引第三方 action —— runner 自带 Node。
+  # 现在只做类型检查 + 构建；等 wb-server 开始 rust-embed web/dist 之后，
+  # 这个 job 必须排在 rust 之前（embed 在编译期就要读那个目录，缺了直接编译失败）。
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Type-check and build frontend
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run check
+          npm run build
+      - name: Verify the build output is self-contained
+        working-directory: web
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          dist = pathlib.Path("dist")
+          missing = [n for n in ("index.html", "style.css", "main.js", "api.js")
+                     if not (dist / n).is_file()]
+          assert not missing, f"dist 缺少：{missing}"
+          # 页面必须引用同目录的 main.js，否则部署成静态站点后会 404。
+          html = (dist / "index.html").read_text(encoding="utf-8")
+          assert 'src="./main.js"' in html, "index.html 没有引用 ./main.js"
+          print("dist 自包含检查通过")
+          PY
   package:
-    needs: [test, rust]
+    needs: [test, rust, web]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683

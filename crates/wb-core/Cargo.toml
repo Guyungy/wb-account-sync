@@ -9,7 +9,11 @@ repository.workspace = true
 [dependencies]
 sha2.workspace = true
 
-# serde_json 只用于测试里读 golden 夹具（把 Python 生成的 JSON 折成 PyValue 再比对），
-# 不进运行时依赖树 —— 生产路径上我们自己编码，正是为了避免标准库与 CPython 的差异。
+# serde_json 只用来**读**外部 JSON（账号快照、settings.json、undo.json）。
+# 写出去的一律走自家的 pyjson —— 标准库的分隔符与浮点规则跟 CPython 不同，
+# 哈希差一个字节就是完全不同的一串。
+# preserve_order 是必需的：settings.json 做渠道并集时要保住原有键序。
+serde_json = { version = "1", features = ["preserve_order"] }
+
 [dev-dependencies]
-serde_json = "1"
+tempfile = "3"

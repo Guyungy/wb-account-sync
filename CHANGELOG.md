@@ -1,5 +1,32 @@
 # 更新记录
 
+## 未发布 — 底座改 Rust + TypeScript（第二步：home 与前端骨架）
+
+**形态改定：桌面壳从自建 `wry + tao` 改为 Tauri 2。** 理由是窗口/菜单/打包/更新
+一套齐；代价是 Rust 依赖树明显变重（首次编译产物约 2–4 GB），磁盘门槛随之调整。
+一处架构选择记在 `docs/RUST_MIGRATION.md`：桌面版**用内嵌 HTTP 而不是 Tauri IPC**，
+这样界面只有一份实现，浏览器与桌面窗口共用，也保住「只绑 127.0.0.1 + token」这套
+已在 Python 版验证过的边界。
+
+- **Rust：新增 `wb-core::home`** —— 数据目录表示与目录扫描。
+  这一层看着像工具函数，其实在**契约**上：`dir_size` 算出的 `approx_bytes` 会进
+  计划正文、决定 `plan_id`，所以符号链接口径必须与 Python 的 `os.walk` 一致
+  （指向目录的链接不递归也不计入、指向文件的链接按目标大小算、坏链接跳过）。
+  三条都有单独的测试钉住 —— 它们在 macOS 上有真实触发场景。
+  错误文案也是契约（`[标签] 缺少数据库：…`），照 Python 逐字对齐。
+- **新增 `wb-core::error`**：受控失败类型，对应 Python 的 `BridgeError`。
+- **TypeScript：新增 `web/` 前端工程。** 刻意**不用 Vite、不引框架** ——
+  `typescript` 只要约 23 MB，Vite 的 `node_modules` 要 150–300 MB，
+  而磁盘是当前最紧的资源；Tauri 要的只是一个静态目录，`tsc` 的 ESM 输出正好就是。
+  产物 `web/dist/` 是自包含静态站点，Tauri 的 `frontendDist` 与后续的资产嵌入直接吃它。
+- **数据层与渲染层分开**：`web/src/api.ts` 是纯逻辑，在浏览器与 Node 里都能跑，
+  因此可以对着**真实后端**跑冒烟（`web/smoke.mjs`，17 项断言，含错误路径）。
+  「页面看起来对」不算数 —— 字段名写错照样一片空白，而冒烟会当场抓住。
+- **CI 增加 `web` job**（类型检查 + 构建 + 校验 dist 自包含），同样不引第三方 action。
+  注：等 `wb-server` 开始 `rust-embed` `web/dist` 之后，这个 job 必须排在 `rust` 之前。
+
+验证：Rust 32 项、Python 182 项全绿；TS 类型检查与构建通过；前端数据层对真实后端冒烟通过。
+
 ## 未发布 — 底座改 Rust + TypeScript（第一步：pyjson）
 
 底座从 Go 换成 Rust（界面将来是 TypeScript）。Go 的实现没删，移进 `legacy-go/`

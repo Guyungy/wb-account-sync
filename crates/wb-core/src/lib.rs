@@ -6,4 +6,6 @@
 //! 模块按依赖从轻到重分期落地（见 `docs/RUST_MIGRATION.md`）：
 //! `pyjson` → `home` → `plan` → `apply` → `backup` → `verify` → `restore` → `memory`。
 
+pub mod error;
+pub mod home;
 pub mod pyjson;
