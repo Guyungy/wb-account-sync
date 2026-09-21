@@ -18,7 +18,9 @@ import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, "tools")
-GO_MODULE = os.path.join(ROOT, "gobridge")
+# Go 侧已降为参照实现（2026-09-21 起主底座改 Rust + TypeScript），
+# 但这些等价性测试仍守着它的保真度 —— 重写 Rust 时正是拿它对照。
+GO_MODULE = os.path.join(ROOT, "legacy-go")
 GO = shutil.which("go")
 
 SESSION_COLUMNS = (

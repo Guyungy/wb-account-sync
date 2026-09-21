@@ -1,0 +1,420 @@
+{
+  "generated_by": "tools/gen_pyjson_golden.py",
+  "note": "期望输出由 CPython 现场算出，不是手抄。改动请重跑生成器。",
+  "python": "3.13.12",
+  "compact": [
+    {
+      "label": "int_zero",
+      "json": "0",
+      "expected": "0",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "label": "int_neg",
+      "json": "-1",
+      "expected": "-1",
+      "sha256": "1bad6b8cf97131fceab8543e81f7757195fbb1d36b376ee994ad1cf17699c464"
+    },
+    {
+      "label": "int_i64_max",
+      "json": "9223372036854775807",
+      "expected": "9223372036854775807",
+      "sha256": "b34a1c30a715f6bf8b7243afa7fab883ce3612b7231716bdcbbdc1982e1aed29"
+    },
+    {
+      "label": "int_i64_min",
+      "json": "-9223372036854775808",
+      "expected": "-9223372036854775808",
+      "sha256": "85386477f3af47e4a0b308ee3b3a688df16e8b2228105dd7d4dcd42a9807cb78"
+    },
+    {
+      "label": "int_2pow53",
+      "json": "9007199254740992",
+      "expected": "9007199254740992",
+      "sha256": "c681da39d7273a6a24c15c9cac3a75526ff2ecf8ba4ee60346a0c70c8163bdb2"
+    },
+    {
+      "label": "int_year",
+      "json": "2026",
+      "expected": "2026",
+      "sha256": "158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab"
+    },
+    {
+      "label": "bool_true",
+      "json": "true",
+      "expected": "true",
+      "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+    },
+    {
+      "label": "bool_false",
+      "json": "false",
+      "expected": "false",
+      "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
+    },
+    {
+      "label": "null_value",
+      "json": "null",
+      "expected": "null",
+      "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    },
+    {
+      "label": "float_zero",
+      "json": "0.0",
+      "expected": "0.0",
+      "sha256": "8aed642bf5118b9d3c859bd4be35ecac75b6e873cce34e7b6f554b06f75550d7"
+    },
+    {
+      "label": "float_neg_zero",
+      "json": "-0.0",
+      "expected": "-0.0",
+      "sha256": "c26617c7ccbcaa6631b45d851b8cf56e21d2ca624bdb1193afdbd4b560702cec"
+    },
+    {
+      "label": "float_one",
+      "json": "1.0",
+      "expected": "1.0",
+      "sha256": "d0ff5974b6aa52cf562bea5921840c032a860a91a3512f7fe8f768f6bbe005f6"
+    },
+    {
+      "label": "float_half",
+      "json": "1.5",
+      "expected": "1.5",
+      "sha256": "9f29a130438b81170b92a42650f9a94291ecad60bd47af2a3886e75f7f728725"
+    },
+    {
+      "label": "float_neg_half",
+      "json": "-1.5",
+      "expected": "-1.5",
+      "sha256": "37c2b212b94e5372b33df924ea2a91182d90c237d0bf942c1768e794ebef2376"
+    },
+    {
+      "label": "float_tenth",
+      "json": "0.1",
+      "expected": "0.1",
+      "sha256": "14be4b45f18e0d8c67b4f719b5144eee88497e413709d11d85b096d8e2346310"
+    },
+    {
+      "label": "float_third",
+      "json": "0.3333333333333333",
+      "expected": "0.3333333333333333",
+      "sha256": "e965f1b975608cb0d1dad8c30d17e0fe1bdea42df938c0bdc29d75c97b45c44b"
+    },
+    {
+      "label": "float_hundred",
+      "json": "100.0",
+      "expected": "100.0",
+      "sha256": "43b87f618caab482ebe4976c92bcd6ad308b48055f1c27b4c574f3e31d7683e0"
+    },
+    {
+      "label": "float_123_456",
+      "json": "123.456",
+      "expected": "123.456",
+      "sha256": "52dad41684065ccf8dd86bc21e739e57c750e4e1305f759956b7373308023eae"
+    },
+    {
+      "label": "float_1e15",
+      "json": "1e15",
+      "expected": "1000000000000000.0",
+      "sha256": "c02731631f61648f06ba5501a9c68e2b0a9186a934ff45f40ab28eb6f3673021"
+    },
+    {
+      "label": "float_1e16",
+      "json": "1e16",
+      "expected": "1e+16",
+      "sha256": "a144838520595009e7daf5aff8472573f9ce6a4bcd8c30673675618883464ab0"
+    },
+    {
+      "label": "float_boundary_hi",
+      "json": "9999999999999998.0",
+      "expected": "9999999999999998.0",
+      "sha256": "46a1ec5321afd7b3c041a32f7014c90bda1be47f1ff7ff2be5790809e5303659"
+    },
+    {
+      "label": "float_1e17",
+      "json": "1e17",
+      "expected": "1e+17",
+      "sha256": "2dfb9f846280066637a52f8ff48f25f9313610a937827c79b73c52202461a6b1"
+    },
+    {
+      "label": "float_1e-4",
+      "json": "1e-4",
+      "expected": "0.0001",
+      "sha256": "e539aebac7fd2ed8aba8854fedeaa65436962f8ee1c82341b394698f085b6496"
+    },
+    {
+      "label": "float_1e-5",
+      "json": "1e-5",
+      "expected": "1e-05",
+      "sha256": "5a9530d3c6d5faad6ba8afe16fb8e438df23865128370b2ec14ef622bb5f2ec9"
+    },
+    {
+      "label": "float_boundary_lo",
+      "json": "0.0001",
+      "expected": "0.0001",
+      "sha256": "e539aebac7fd2ed8aba8854fedeaa65436962f8ee1c82341b394698f085b6496"
+    },
+    {
+      "label": "float_1e-7",
+      "json": "1e-7",
+      "expected": "1e-07",
+      "sha256": "e485fac25775a7da830698e7daac582737fc8b43ba4b351467a16cf8ed83122a"
+    },
+    {
+      "label": "float_1e100",
+      "json": "1e100",
+      "expected": "1e+100",
+      "sha256": "33d5997bb6b66e3ae3b8e79fff5fe0954bc7b2a38a9d95d83f437d0e57b68f82"
+    },
+    {
+      "label": "float_1e_neg100",
+      "json": "1e-100",
+      "expected": "1e-100",
+      "sha256": "b8b3215845a6813c22e2875e1d0b002c947e17cca7391d6bd4d677c116f20aee"
+    },
+    {
+      "label": "float_min_subnormal",
+      "json": "5e-324",
+      "expected": "5e-324",
+      "sha256": "c46e7ca1be4c8734f373a56530787288fa2058d73d07855e9247e949f811a42a"
+    },
+    {
+      "label": "float_max",
+      "json": "1.7976931348623157e308",
+      "expected": "1.7976931348623157e+308",
+      "sha256": "c2784e1abd6317452708f3fbf9641c16b959561bc621a1d408c23a20aa2cb585"
+    },
+    {
+      "label": "float_pi",
+      "json": "3.141592653589793",
+      "expected": "3.141592653589793",
+      "sha256": "f0a1b7875844c3ae0d28f3cc44e9a6241da33e2623a69f0a71263158dffb4e87"
+    },
+    {
+      "label": "str_empty",
+      "json": "\"\"",
+      "expected": "\"\"",
+      "sha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+    },
+    {
+      "label": "str_ascii",
+      "json": "\"hello\"",
+      "expected": "\"hello\"",
+      "sha256": "5aa762ae383fbb727af3c7a36d4940a5b8c40a989452d2304fc958ff3f354e7a"
+    },
+    {
+      "label": "str_quote",
+      "json": "\"a\\\"b\"",
+      "expected": "\"a\\\"b\"",
+      "sha256": "8bbcb681750af483258c5ca72e83c5c397bf66aa01e7c7787c0d212fc1f6fa1d"
+    },
+    {
+      "label": "str_backslash",
+      "json": "\"a\\\\b\"",
+      "expected": "\"a\\\\b\"",
+      "sha256": "d6b4439bd2d0fecbb8aeb27d4370b0354683ea72adc84cca99b5fe80aa0b62d0"
+    },
+    {
+      "label": "str_named_escapes",
+      "json": "\"a\\nb\\tc\\rd\\be\\ff\"",
+      "expected": "\"a\\nb\\tc\\rd\\be\\ff\"",
+      "sha256": "cebdff181351b976c507680a8bb500be97dbf67e5e172b74fbb6fbca0843707c"
+    },
+    {
+      "label": "str_c0_1f",
+      "json": "\"\\u001f\"",
+      "expected": "\"\\u001f\"",
+      "sha256": "6e1f297fd3657440862f051f44e4bc0ee6b26348011e5891e91aa1aa7e9c0759"
+    },
+    {
+      "label": "str_c0_00",
+      "json": "\"\\u0000\"",
+      "expected": "\"\\u0000\"",
+      "sha256": "700174b26850d224c7a156cb6a45cea08031eab640fcfc1eaf7f770ab9aeaa66"
+    },
+    {
+      "label": "str_del_7f",
+      "json": "\"\\u007f\"",
+      "expected": "\"\"",
+      "sha256": "6fe76740e12a93d5598fe685cb6ad3d3c94e44609065a56866b69647772026ec"
+    },
+    {
+      "label": "str_forward_slash",
+      "json": "\"a/b\"",
+      "expected": "\"a/b\"",
+      "sha256": "f5effa31772a3689cb116700c569f4b72d765290968f099016a899ab6c1e4ee3"
+    },
+    {
+      "label": "str_cjk",
+      "json": "\"中文测试\"",
+      "expected": "\"中文测试\"",
+      "sha256": "36c1b966996833fa0e2105555f6a911bfc1a8db29de65f624f8ba1fe1fb4456f"
+    },
+    {
+      "label": "str_emoji",
+      "json": "\"🎉🚀\"",
+      "expected": "\"🎉🚀\"",
+      "sha256": "3e2913b979b90b8545cfae1d8cb22aa4b46a7d9bf79882859c67cb72ab6d52d2"
+    },
+    {
+      "label": "str_fullwidth",
+      "json": "\"（）【】、\"",
+      "expected": "\"（）【】、\"",
+      "sha256": "b2e172c11d2bbe640e7f6f84afce204ea8bfc5af046683c9db67edd0ed133e74"
+    },
+    {
+      "label": "str_literal_backslash_u",
+      "json": "\"\\\\u4e2d\"",
+      "expected": "\"\\\\u4e2d\"",
+      "sha256": "771052e6d665a6ddc6f1e59ed81cd28a757887e661d143831ef9875684db289e"
+    },
+    {
+      "label": "str_windows_path",
+      "json": "\"C:\\\\Users\\\\demo\"",
+      "expected": "\"C:\\\\Users\\\\demo\"",
+      "sha256": "a356695c3ea2b06852ce63c38e67bace99ac318a09785163155b32744bf764ab"
+    },
+    {
+      "label": "array_empty",
+      "json": "[]",
+      "expected": "[]",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "label": "array_nums",
+      "json": "[1, 2, 3]",
+      "expected": "[1, 2, 3]",
+      "sha256": "a36b1f2c3f84522dd1005145646617d7054c0851e97c72a039c0bdfac9fa07f3"
+    },
+    {
+      "label": "array_mixed",
+      "json": "[1, \"a\", true, null, 1.5]",
+      "expected": "[1, \"a\", true, null, 1.5]",
+      "sha256": "98602a61b0a3e10d5cea9c323494fc68fd4c243b453c581f8747222ef546893b"
+    },
+    {
+      "label": "array_nested",
+      "json": "[[1, [2, [3]]]]",
+      "expected": "[[1, [2, [3]]]]",
+      "sha256": "bfea2766e4308fe4d9fc8ad05bb1101b68da32db1660ac1482b5b8f6f68e8621"
+    },
+    {
+      "label": "array_of_arrays_empty",
+      "json": "[[], [[]]]",
+      "expected": "[[], [[]]]",
+      "sha256": "13afdb57b4cc8fd76b12f4d51c7bc455b53700b18572ce892e5c04b17b6856d2"
+    },
+    {
+      "label": "obj_empty",
+      "json": "{}",
+      "expected": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "label": "obj_keysort_ascii",
+      "json": "{\"b\": 1, \"a\": 2, \"A\": 3, \"_\": 4, \"Z\": 5}",
+      "expected": "{\"A\": 3, \"Z\": 5, \"_\": 4, \"a\": 2, \"b\": 1}",
+      "sha256": "1f83e6a7b4f8cdd588f2de5a228eec33a3dfb1a7e70020dc1b894a961ce85d36"
+    },
+    {
+      "label": "obj_cjk_keys",
+      "json": "{\"中文\": 1, \"英文\": 2, \"abc\": 3}",
+      "expected": "{\"abc\": 3, \"中文\": 1, \"英文\": 2}",
+      "sha256": "4e1ae22d7d3b14adbca5fedfeec9636a6967361ce1a01904206ecba4ab2993ef"
+    },
+    {
+      "label": "obj_nested",
+      "json": "{\"outer\": {\"inner\": {\"leaf\": 1}}}",
+      "expected": "{\"outer\": {\"inner\": {\"leaf\": 1}}}",
+      "sha256": "2ea782f04caafa6d42bef2b4b9fdd7f439478fa161e3b153c96612e3f63fe1e5"
+    },
+    {
+      "label": "obj_nonascii_values",
+      "json": "{\"path\": \"/Users/示例/数据\", \"note\": \"备注：含标点。\"}",
+      "expected": "{\"note\": \"备注：含标点。\", \"path\": \"/Users/示例/数据\"}",
+      "sha256": "0d4de88d5ff3399dcec85730a256b83fa6e3fd2921010c89c42680b1a99b2261"
+    },
+    {
+      "label": "obj_mixed_shapes",
+      "json": "{\"arr\": [1, {\"k\": []}], \"obj\": {\"x\": {}}, \"s\": \"\"}",
+      "expected": "{\"arr\": [1, {\"k\": []}], \"obj\": {\"x\": {}}, \"s\": \"\"}",
+      "sha256": "0d1acdfd690a6058605785e8049c9a45b1d2b74bd3ce46a9450878b56299850f"
+    },
+    {
+      "label": "obj_plan_body",
+      "json": "{\"version\": \"0.3.0a1\", \"home_a\": \"/Users/demo/.workbuddy\", \"home_b\": \"/Users/demo/.workbuddy-ai\", \"uid_a\": \"0f1e2d3c4b5a6978\", \"uid_b\": \"8f7e6d5c4b3a2910\", \"options\": {\"sessions\": true, \"memory\": false, \"skills\": true}, \"source_fingerprints\": {\"sessions_all\": \"9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b\", \"memory\": \"1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b\"}, \"entries_fingerprint\": \"cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe\"}",
+      "expected": "{\"entries_fingerprint\": \"cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe\", \"home_a\": \"/Users/demo/.workbuddy\", \"home_b\": \"/Users/demo/.workbuddy-ai\", \"options\": {\"memory\": false, \"sessions\": true, \"skills\": true}, \"source_fingerprints\": {\"memory\": \"1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b\", \"sessions_all\": \"9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b9f2b\"}, \"uid_a\": \"0f1e2d3c4b5a6978\", \"uid_b\": \"8f7e6d5c4b3a2910\", \"version\": \"0.3.0a1\"}",
+      "sha256": "cf902c26ce72984e3e2d16215f0a0e1cd6c0b6c928ad9404e45861495cabb4d5"
+    },
+    {
+      "label": "obj_plan_with_entries",
+      "json": "{\"entries\": [{\"kind\": \"file\", \"mode\": \"copy_if_missing\", \"src\": \"/Users/示例/a.db\", \"dst\": \"/Users/示例/b.db\"}, {\"kind\": \"tree\", \"mode\": \"merge_tree\", \"src\": \"/Users/示例/skills\", \"dst\": \"/Users/示例/skills\", \"note\": \"并集，不覆盖已有\"}], \"summary\": {\"files\": 2, \"bytes\": 540512345}}",
+      "expected": "{\"entries\": [{\"dst\": \"/Users/示例/b.db\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"src\": \"/Users/示例/a.db\"}, {\"dst\": \"/Users/示例/skills\", \"kind\": \"tree\", \"mode\": \"merge_tree\", \"note\": \"并集，不覆盖已有\", \"src\": \"/Users/示例/skills\"}], \"summary\": {\"bytes\": 540512345, \"files\": 2}}",
+      "sha256": "f7cd736436d86b63da0f243e7bddd2afcd9275308f68dd96405dfc060c4fa06d"
+    }
+  ],
+  "indent2": [
+    {
+      "label": "indent_empty_containers",
+      "json": "{\"a\": {}, \"b\": []}",
+      "indent": 2,
+      "expected": "{\n  \"a\": {},\n  \"b\": []\n}",
+      "sha256": "8d2d5e17d2a8cab803d40adb19af0e9e964ea1ab900164b66ddfd73a70539cc1"
+    },
+    {
+      "label": "indent_array",
+      "json": "[1, [2, 3], {\"k\": \"v\"}]",
+      "indent": 2,
+      "expected": "[\n  1,\n  [\n    2,\n    3\n  ],\n  {\n    \"k\": \"v\"\n  }\n]",
+      "sha256": "eb93c5da91d4c3387b07df47201a6ad3b99274ce69019ff2cb8f6f4bb87beee1"
+    },
+    {
+      "label": "indent_deep",
+      "json": "{\"a\": {\"b\": {\"c\": [1, 2]}}}",
+      "indent": 2,
+      "expected": "{\n  \"a\": {\n    \"b\": {\n      \"c\": [\n        1,\n        2\n      ]\n    }\n  }\n}",
+      "sha256": "6a15f60b6e5ef25f1a1188efd3e041bf35f3771682fbbc8ab64adb8698c670ed"
+    },
+    {
+      "label": "indent_scalars",
+      "json": "{\"n\": null, \"b\": true, \"i\": 7, \"f\": 1.5}",
+      "indent": 2,
+      "expected": "{\n  \"b\": true,\n  \"f\": 1.5,\n  \"i\": 7,\n  \"n\": null\n}",
+      "sha256": "32eb7d6c1403a58b35b3d996ada66c45454fde5994417fd8976cf57e682ee65f"
+    },
+    {
+      "label": "indent_cjk",
+      "json": "{\"键\": \"值\", \"arr\": [\"一\", \"二\"]}",
+      "indent": 2,
+      "expected": "{\n  \"arr\": [\n    \"一\",\n    \"二\"\n  ],\n  \"键\": \"值\"\n}",
+      "sha256": "d120112ed42f7a9d7c80299f3b37318fd5620b6dbeff4e6d722755ee51b2be0f"
+    },
+    {
+      "label": "indent_empty_top",
+      "json": "{}",
+      "indent": 2,
+      "expected": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "label": "indent_empty_array_top",
+      "json": "[]",
+      "indent": 2,
+      "expected": "[]",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "label": "indent_plan_body",
+      "json": "{\"version\": \"0.3.0a1\", \"options\": {\"sessions\": true, \"memory\": false}, \"entries\": [{\"kind\": \"file\", \"src\": \"/a\", \"dst\": \"/b\", \"note\": \"\"}, {\"kind\": \"tree\", \"src\": \"/c\", \"dst\": \"/d\"}]}",
+      "indent": 2,
+      "expected": "{\n  \"entries\": [\n    {\n      \"dst\": \"/b\",\n      \"kind\": \"file\",\n      \"note\": \"\",\n      \"src\": \"/a\"\n    },\n    {\n      \"dst\": \"/d\",\n      \"kind\": \"tree\",\n      \"src\": \"/c\"\n    }\n  ],\n  \"options\": {\n    \"memory\": false,\n    \"sessions\": true\n  },\n  \"version\": \"0.3.0a1\"\n}",
+      "sha256": "ddbf014c03f1cffe9eee337396ed339b7bf9a86811c7df29fed8bd749b723d00"
+    },
+    {
+      "label": "indent_memory_block",
+      "json": "{\"uid\": \"0f1e\", \"memoryBlock\": \"行一\\n行二\\t制表\", \"updatedAt\": \"2026-09-21T11:00:00+08:00\"}",
+      "indent": 2,
+      "expected": "{\n  \"memoryBlock\": \"行一\\n行二\\t制表\",\n  \"uid\": \"0f1e\",\n  \"updatedAt\": \"2026-09-21T11:00:00+08:00\"\n}",
+      "sha256": "793ed94fb365c3580aaa5f469523733a05be884bd6ccc8300806044846d0b9cb"
+    }
+  ]
+}

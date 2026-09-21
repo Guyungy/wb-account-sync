@@ -21,7 +21,7 @@ if _TOOLS_DIR not in sys.path:
 
 import wb_ui  # noqa: E402  同目录模块
 
-DEST = os.path.join(_REPO, "gobridge", "internal", "webui", "static", "index.html")
+DEST = os.path.join(_REPO, "legacy-go", "internal", "webui", "static", "index.html")
 
 
 def main() -> int:

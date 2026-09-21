@@ -1,0 +1,30 @@
+# Rust 工作区（2026-09-21 起取代 legacy-go 成为主底座）
+#
+# 依赖从轻到重逐阶段引入：P1 的 pyjson 只需要 sha2，
+# 不提前拉 tokio / axum / wry —— 本机磁盘只有个位数 GB，
+# 依赖树每重一分，编译产物就多占几百 MB。
+
+[workspace]
+resolver = "2"
+members = ["crates/wb-core"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/Guyungy/wb-account-sync"
+
+[workspace.dependencies]
+sha2 = "0.10"
+
+# 磁盘是硬约束：dev profile 默认带完整调试信息，target/ 会膨胀数倍。
+# 只留行号表，既能看 backtrace，又不至于把盘吃光。
+# 需要完整调试时临时改回 `debug = 2`，但先确认 `df -h ~` 有空间。
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true

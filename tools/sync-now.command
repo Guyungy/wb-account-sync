@@ -17,7 +17,7 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.." || exit 1
 
-BIN="gobridge/wb-bridge"
+BIN="legacy-go/wb-bridge"
 
 if [ ! -x "$BIN" ]; then
   echo "首次使用，正在构建一次可执行文件…"
@@ -28,7 +28,7 @@ if [ ! -x "$BIN" ]; then
     read -r -p "按回车关闭…" _
     exit 1
   fi
-  ( cd gobridge && "$GO_BIN" build -o wb-bridge ./cmd/wb-bridge ) || {
+  ( cd legacy-go && "$GO_BIN" build -o wb-bridge ./cmd/wb-bridge ) || {
     echo "构建失败。"
     read -r -p "按回车关闭…" _
     exit 1

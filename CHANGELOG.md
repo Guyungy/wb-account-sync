@@ -1,5 +1,30 @@
 # 更新记录
 
+## 未发布 — 底座改 Rust + TypeScript（第一步：pyjson）
+
+底座从 Go 换成 Rust（界面将来是 TypeScript）。Go 的实现没删，移进 `legacy-go/`
+降为参照 —— 它里面那几个坑（浮点 repr、保序 map、`--json` 日志污染 stdout）
+是踩过一遍的，重写时直接对照比重新踩一遍划算。
+
+- **新增 `crates/wb-core`（Rust 工作区）** 与 `docs/RUST_MIGRATION.md`。
+  依赖从轻到重分期引入：P1 只需要 `sha2`，不提前拉 tokio / axum / wry ——
+  本机磁盘只有个位数 GB，依赖树每重一分，编译产物就多占几百 MB。
+- **`wb-core::pyjson`：复刻 CPython 的 `json.dumps`**，逐字节级。
+  `plan_id` 是 Python 对 `json.dumps(body, ensure_ascii=False, sort_keys=True)`
+  取 SHA-256 的结果，哈希差一个字节就是完全不同的一串，所以标准库的 JSON
+  一概不能用（分隔符没空格、浮点切科学计数的阈值也不一样）。
+- **golden 夹具的期望值由 CPython 现场算出**，不是手抄的
+  （`tools/gen_pyjson_golden.py` → `tests/fixtures/pyjson_golden.json`，
+  58 紧凑例 + 9 缩进例）。手抄的期望值一旦抄错，两边一起错，测试反而是绿的 ——
+  本轮就真的手抄错过一个 SHA-256，被自查当场纠正。
+- 三层校验互相咬住：Python 侧验夹具**等于 CPython**、验夹具**是最新的**；
+  Rust 侧验自己的编码**等于夹具**。任何一层松掉，另两层都会露出来。
+- CI 增加 `rust` job（`cargo test --workspace --locked`），从第一天守住
+  `plan_id`。**刻意不引第三方 action** —— runner 自带稳定版 Rust，
+  少一个 action 就少一处要盯 SHA 的供应链面。
+- dev profile 设 `debug = "line-tables-only"`：完整调试信息会让 `target/`
+  膨胀数倍，而磁盘是当前最紧的资源。
+
 ## 未发布 — Go 底座（第三步：界面）
 
 把 HTTP 界面迁到 Go。**前端一个字节都没重写**，整块 `go:embed` 原样复用：

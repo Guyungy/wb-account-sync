@@ -22,12 +22,19 @@ journal.json
 .wb-account-sync-state
 .wb-account-sync-locks/
 
-# Go 构建产物（必须盯着：输出路径写法一变就会漏）
+# Go 构建产物（legacy-go 是参照实现，2026-09-21 起非主路径）
+# 必须盯着：输出路径写法一变就会漏。
 # 注意：目录形态的忽略规则会连目录里的源码一起吞掉，
 # 所以这里一律写成"具体到可执行文件名"的完整路径，不要用 **/wb-bridge。
-gobridge/wb-bridge
-gobridge/cmd/wb-bridge/wb-bridge
-gobridge/**/*.test
+legacy-go/wb-bridge
+legacy-go/cmd/wb-bridge/wb-bridge
+legacy-go/**/*.test
+
+# Rust 构建产物（主底座；P0 之后生效）
+target/
+crates/*/target/
+web/node_modules/
+web/dist/
 
 # Project working memory (daily logs / user-specific notes)
 .workbuddy/

@@ -1,0 +1,15 @@
+[package]
+name = "wb-core"
+description = "WorkBuddy 跨 App 数据目录打通的迁移引擎（plan_id 指纹、计划、执行、核验）"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+sha2.workspace = true
+
+# serde_json 只用于测试里读 golden 夹具（把 Python 生成的 JSON 折成 PyValue 再比对），
+# 不进运行时依赖树 —— 生产路径上我们自己编码，正是为了避免标准库与 CPython 的差异。
+[dev-dependencies]
+serde_json = "1"

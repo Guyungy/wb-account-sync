@@ -28,7 +28,8 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, "tools")
-GO_MODULE = os.path.join(ROOT, "gobridge")
+# Go 侧已降为参照实现（2026-09-21 起主底座改 Rust + TypeScript）。
+GO_MODULE = os.path.join(ROOT, "legacy-go")
 GO = shutil.which("go")
 
 TOKEN = "test-token-0123456789"
