@@ -156,9 +156,30 @@ wb-account-sync/
 
 ### P2 `wb-core` 其余模块
 
-home → plan → apply → backup → verify → restore → memory → fsutil。
+- **`home` ✅ 已完成**（`src/home.rs`）：数据目录表示与目录扫描。
+  这一层在**契约上** —— `dir_size` 的 `approx_bytes` 会进计划正文、决定 `plan_id`。
+- **`plan` ✅ 已完成**（`src/plan.rs`）：`collect_rows` / `build_direction_entries` /
+  `build_plan` 与 `plan_id`。引入 `rusqlite`（`bundled`）。
+  **验收已达成**：两个用例（默认勾选 / 全开）的计划正文规范编码、条目、跳过计数、
+  `plan_id` 与 CPython 全部一致。
+- ⬜ 待做：`apply` / `backup` / `verify` / `restore` / `memory` / `fsutil`。
 
-**验收**：用现有合成夹具（复制成两组目录）跑 plan → apply → verify → restore，数据库逐行、文件树哈希、记忆文件与 `settings.json`（时间戳归一化后）逐项对账。
+#### plan 的对账是怎么做的
+
+1. `tools/gen_plan_golden.py` 在**固定路径**`/tmp/wb-plan-parity/` 上造出两个合成 home
+   （固定路径是必需的：正文含 home 的绝对路径，两边必须跑在同一份路径上），
+   跑一遍 CPython 的 `build_plan`，把结果落盘。
+2. 夹具存**被哈希的那串规范编码原文**，而不只是哈希 —— 只比哈希的话失败信息是一串
+   十六进制，你只知道不一样、不知道哪里不一样。
+3. Rust 侧 `tests/plan_golden.rs` 把同一份夹具回放出来，逐项比对。
+4. Python 侧 `tests/test_plan_golden.py` 守夹具的时效性、覆盖度，以及
+   **「凭据绝不进计划」**这条产品承诺。
+
+夹具里刻意埋了一个 `connectors/<uid>/.master.key`，并**反向**也断言它确实存在 ——
+否则「它没出现在计划里」只是在证明一个不存在的东西没出现。
+
+**剩余部分的验收**：用同一套夹具跑 plan → apply → verify → restore，
+数据库逐行、文件树哈希、记忆文件与 `settings.json`（时间戳归一化后）逐项对账。
 
 ### P3 `wb-platform` + `wb-cli`
 
