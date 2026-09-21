@@ -15,5 +15,16 @@ sha2.workspace = true
 # preserve_order 是必需的：settings.json 做渠道并集时要保住原有键序。
 serde_json = { version = "1", features = ["preserve_order"] }
 
+# bundled = 自带 SQLite 源码。不依赖系统库，打包成单文件时省心；
+# 代价是首次编译慢一点（实测本机约 4 秒，可以接受）。
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+
+# 只为了拿本地时区偏移（created_at 的 `+0800`）。标准库没有稳定的本地时间接口。
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 tempfile = "3"
+# 集成测试要读 golden 夹具、并把夹具回放进临时目录，需要直接 use serde_json。
+serde_json = { version = "1", features = ["preserve_order"] }
+rusqlite = { version = "0.40.2", features = ["bundled"] }

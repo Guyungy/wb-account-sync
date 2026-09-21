@@ -22,6 +22,11 @@ journal.json
 .wb-account-sync-state
 .wb-account-sync-locks/
 
+# 例外：tests/fixtures 下的黄金夹具是**源码**，不是运行时生成的计划文件。
+# 上面那条 `plan*.json` 会把 plan_golden.json 一起吞掉 ——
+# 一旦被吞，夹具不入库，CI 上 Rust 的 plan_id 测试直接找不到文件而失败。
+!tests/fixtures/*.json
+
 # Go 构建产物（legacy-go 是参照实现，2026-09-21 起非主路径）
 # 必须盯着：输出路径写法一变就会漏。
 # 注意：目录形态的忽略规则会连目录里的源码一起吞掉，

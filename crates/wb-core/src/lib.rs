@@ -8,4 +8,5 @@
 
 pub mod error;
 pub mod home;
+pub mod plan;
 pub mod pyjson;

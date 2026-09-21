@@ -1,0 +1,814 @@
+{
+  "generated_by": "tools/gen_plan_golden.py",
+  "note": "期望值由 CPython 现场算出。改动夹具或选项后必须重跑生成器。",
+  "fixture": {
+    "root": "/tmp/wb-plan-parity",
+    "home_a": "/tmp/wb-plan-parity/home-a",
+    "home_b": "/tmp/wb-plan-parity/home-b",
+    "schema": [
+      "CREATE TABLE sessions (\n        id TEXT, cwd TEXT, user_id TEXT, deleted_at TEXT, title TEXT,\n        created_at TEXT, updated_at TEXT, status TEXT, mode TEXT, model TEXT,\n        permission_mode TEXT, is_playground TEXT, use_sandbox_cli TEXT,\n        buddy_snapshot_id TEXT, context_window TEXT)",
+      "CREATE TABLE session_usage (session_id TEXT, tokens INTEGER, cost REAL, note TEXT)",
+      "CREATE TABLE workspaces (path TEXT, name TEXT)",
+      "CREATE TABLE buddy_snapshots (snapshot_id TEXT, payload TEXT)",
+      "CREATE TABLE automations (\n        id TEXT, deleted_at TEXT, title TEXT, status TEXT,\n        owner_user_id TEXT, owner_status TEXT, next_run_at TEXT)",
+      "CREATE TABLE automation_runs (thread_id TEXT, automation_id TEXT, ok INTEGER)",
+      "CREATE TABLE automation_runtime_state (automation_id TEXT, running INTEGER, last TEXT)"
+    ],
+    "homes": {
+      "home-a": {
+        "uid": "0f1e2d3c-aaaa-4bbb-8ccc-000000000001",
+        "nickname": "主账号",
+        "tables": {
+          "sessions": [
+            {
+              "id": "s-shared",
+              "cwd": "/tmp/wb-plan-parity/cwd-a",
+              "user_id": "0f1e2d3c-aaaa-4bbb-8ccc-000000000001",
+              "deleted_at": null,
+              "title": "共用会话",
+              "created_at": "1760000000000",
+              "updated_at": "1760000001000",
+              "status": "idle",
+              "mode": "chat",
+              "model": "m",
+              "permission_mode": "default",
+              "is_playground": "0",
+              "use_sandbox_cli": "0",
+              "buddy_snapshot_id": "",
+              "context_window": "128"
+            },
+            {
+              "id": "s-a2",
+              "cwd": "/tmp/wb-plan-parity/cwd-gone",
+              "user_id": "0f1e2d3c-aaaa-4bbb-8ccc-000000000001",
+              "deleted_at": null,
+              "title": "甲侧独有",
+              "created_at": "1760000000000",
+              "updated_at": "1760000001000",
+              "status": "idle",
+              "mode": "chat",
+              "model": "m",
+              "permission_mode": "default",
+              "is_playground": "0",
+              "use_sandbox_cli": "0",
+              "buddy_snapshot_id": "",
+              "context_window": "128"
+            },
+            {
+              "id": "s-gone",
+              "cwd": "/tmp/wb-plan-parity/cwd-a",
+              "user_id": "0f1e2d3c-aaaa-4bbb-8ccc-000000000001",
+              "deleted_at": "1760000002000",
+              "title": "已删除",
+              "created_at": "1760000000000",
+              "updated_at": "1760000001000",
+              "status": "idle",
+              "mode": "chat",
+              "model": "m",
+              "permission_mode": "default",
+              "is_playground": "0",
+              "use_sandbox_cli": "0",
+              "buddy_snapshot_id": "",
+              "context_window": "128"
+            }
+          ],
+          "session_usage": [
+            {
+              "session_id": "s-shared",
+              "tokens": 100,
+              "cost": 0.5,
+              "note": "备注一"
+            },
+            {
+              "session_id": "s-a2",
+              "tokens": 250,
+              "cost": 1.25,
+              "note": "备注二"
+            },
+            {
+              "session_id": "s-gone",
+              "tokens": 999,
+              "cost": 9.5,
+              "note": "不该出现"
+            }
+          ],
+          "workspaces": [
+            {
+              "path": "/tmp/wb-plan-parity/ws-a",
+              "name": "ws-a"
+            }
+          ],
+          "buddy_snapshots": [],
+          "automations": [
+            {
+              "id": "auto-1",
+              "deleted_at": null,
+              "title": "每日汇总",
+              "status": "ACTIVE",
+              "owner_user_id": "0f1e2d3c-aaaa-4bbb-8ccc-000000000001",
+              "owner_status": "confirmed",
+              "next_run_at": "1760009999000"
+            },
+            {
+              "id": "auto-gone",
+              "deleted_at": "1760000005000",
+              "title": "已删自动化",
+              "status": "ACTIVE",
+              "owner_user_id": "0f1e2d3c-aaaa-4bbb-8ccc-000000000001",
+              "owner_status": "confirmed",
+              "next_run_at": "1760009999000"
+            }
+          ],
+          "automation_runs": [
+            {
+              "thread_id": "th-1",
+              "automation_id": "auto-1",
+              "ok": 1
+            },
+            {
+              "thread_id": "th-orphan",
+              "automation_id": "auto-gone",
+              "ok": 0
+            }
+          ],
+          "automation_runtime_state": [
+            {
+              "automation_id": "auto-1",
+              "running": 1,
+              "last": "1760000003000"
+            },
+            {
+              "automation_id": "auto-gone",
+              "running": 1,
+              "last": "1760000004000"
+            }
+          ]
+        },
+        "files": [
+          [
+            "projects/slug-s-a2/s-a2.jsonl",
+            40
+          ],
+          [
+            "projects/slug-s-a2/s-a2.meta.json",
+            25
+          ],
+          [
+            "projects/slug-s-a2/s-a2.file-rollback.ndjson",
+            30
+          ],
+          [
+            "projects/slug-s-a2/s-a2/tool-result.txt",
+            70
+          ],
+          [
+            "artifact-index/s-a2.json",
+            21
+          ],
+          [
+            "tasks/s-a2/step.json",
+            12
+          ],
+          [
+            "changes-detail/s-a2/diff.patch",
+            33
+          ],
+          [
+            "changes-index/s-a2/index.bin",
+            18
+          ],
+          [
+            "file-history/s-a2/v1.bin",
+            27
+          ],
+          [
+            "blobs/ab/cdef",
+            88
+          ],
+          [
+            "plugins/cache/pkg/mod.bin",
+            44
+          ],
+          [
+            "skills/demo/SKILL.md",
+            64
+          ],
+          [
+            "connectors/skills/conn/def.json",
+            19
+          ],
+          [
+            "connectors/0f1e2d3c-aaaa-4bbb-8ccc-000000000001/connector-states.json",
+            27
+          ],
+          [
+            "connectors/0f1e2d3c-aaaa-4bbb-8ccc-000000000001/mcp.json",
+            31
+          ],
+          [
+            "connectors/0f1e2d3c-aaaa-4bbb-8ccc-000000000001/.master.key",
+            16
+          ],
+          [
+            "storage/user-0f1e2d3c-aaaa-4bbb-8ccc-000000000001/pref.json",
+            15
+          ],
+          [
+            "storage/user-0f1e2d3c-aaaa-4bbb-8ccc-000000000001-personal/notes.txt",
+            23
+          ]
+        ]
+      },
+      "home-b": {
+        "uid": "8f7e6d5c-bbbb-4ccc-8ddd-000000000002",
+        "nickname": "副账号",
+        "tables": {
+          "sessions": [
+            {
+              "id": "s-shared",
+              "cwd": "/tmp/wb-plan-parity/cwd-a",
+              "user_id": "8f7e6d5c-bbbb-4ccc-8ddd-000000000002",
+              "deleted_at": null,
+              "title": "共用会话（乙侧副本）",
+              "created_at": "1760000000000",
+              "updated_at": "1760000001000",
+              "status": "idle",
+              "mode": "chat",
+              "model": "m",
+              "permission_mode": "default",
+              "is_playground": "0",
+              "use_sandbox_cli": "0",
+              "buddy_snapshot_id": "",
+              "context_window": "128"
+            },
+            {
+              "id": "s-b1",
+              "cwd": "/tmp/wb-plan-parity/cwd-a",
+              "user_id": "8f7e6d5c-bbbb-4ccc-8ddd-000000000002",
+              "deleted_at": null,
+              "title": "乙侧独有",
+              "created_at": "1760000000000",
+              "updated_at": "1760000001000",
+              "status": "idle",
+              "mode": "chat",
+              "model": "m",
+              "permission_mode": "default",
+              "is_playground": "0",
+              "use_sandbox_cli": "0",
+              "buddy_snapshot_id": "",
+              "context_window": "128"
+            }
+          ],
+          "session_usage": [
+            {
+              "session_id": "s-shared",
+              "tokens": 5,
+              "cost": 0.125,
+              "note": "乙侧"
+            },
+            {
+              "session_id": "s-b1",
+              "tokens": 7,
+              "cost": 0.0625,
+              "note": "乙侧二"
+            }
+          ],
+          "workspaces": [
+            {
+              "path": "/tmp/wb-plan-parity/ws-b",
+              "name": "ws-b"
+            }
+          ],
+          "buddy_snapshots": [],
+          "automations": [],
+          "automation_runs": [],
+          "automation_runtime_state": []
+        },
+        "files": [
+          [
+            "projects/slug-s-b1/s-b1.jsonl",
+            40
+          ],
+          [
+            "projects/slug-s-b1/s-b1.meta.json",
+            25
+          ],
+          [
+            "projects/slug-s-b1/s-b1.file-rollback.ndjson",
+            30
+          ],
+          [
+            "projects/slug-s-b1/s-b1/tool-result.txt",
+            70
+          ],
+          [
+            "artifact-index/s-b1.json",
+            21
+          ],
+          [
+            "tasks/s-b1/step.json",
+            12
+          ],
+          [
+            "changes-detail/s-b1/diff.patch",
+            33
+          ],
+          [
+            "changes-index/s-b1/index.bin",
+            18
+          ],
+          [
+            "file-history/s-b1/v1.bin",
+            27
+          ],
+          [
+            "blobs/ab/cdef",
+            88
+          ],
+          [
+            "plugins/cache/pkg/mod.bin",
+            44
+          ],
+          [
+            "skills/demo/SKILL.md",
+            64
+          ],
+          [
+            "connectors/skills/conn/def.json",
+            19
+          ],
+          [
+            "connectors/8f7e6d5c-bbbb-4ccc-8ddd-000000000002/connector-states.json",
+            27
+          ],
+          [
+            "connectors/8f7e6d5c-bbbb-4ccc-8ddd-000000000002/mcp.json",
+            31
+          ],
+          [
+            "connectors/8f7e6d5c-bbbb-4ccc-8ddd-000000000002/.master.key",
+            16
+          ],
+          [
+            "storage/user-8f7e6d5c-bbbb-4ccc-8ddd-000000000002/pref.json",
+            15
+          ],
+          [
+            "storage/user-8f7e6d5c-bbbb-4ccc-8ddd-000000000002-personal/notes.txt",
+            23
+          ]
+        ]
+      }
+    }
+  },
+  "cases": [
+    {
+      "label": "default",
+      "options": {
+        "include_changes": true,
+        "include_skills": true,
+        "include_plugins": false,
+        "include_automations": false,
+        "include_storage": false,
+        "include_connectors": false,
+        "include_claw": true,
+        "include_memory": true,
+        "overwrite_assets": false
+      },
+      "expected_plan_id": "db6e4a21eb05cc03dc59041dfc0ea318501412689e01115e4a27504bc36bc0d7",
+      "expected_body_canonical": "{\"entries_fingerprint\": \"b8965543796381af9c1086df6fd10d497cb7efb968d579ddedfc6a39671ad28c\", \"home_a\": \"/tmp/wb-plan-parity/home-a\", \"home_b\": \"/tmp/wb-plan-parity/home-b\", \"options\": {\"include_automations\": false, \"include_changes\": true, \"include_claw\": true, \"include_connectors\": false, \"include_memory\": true, \"include_plugins\": false, \"include_skills\": true, \"include_storage\": false, \"overwrite_assets\": false}, \"source_fingerprints\": {\"a2b\": {\"sessions_all\": \"92f05ba8b081b96d6f55ec7ed9376da830dabb8af50e8b996f3ac27ac2a6ba81\"}, \"b2a\": {\"sessions_all\": \"160ac12108f8f075ac9bb220085ebcb39f26825354fafef373839eaf2aa2a52f\"}}, \"uid_a\": \"0f1e2d3c-aaaa-4bbb-8ccc-000000000001\", \"uid_b\": \"8f7e6d5c-bbbb-4ccc-8ddd-000000000002\", \"version\": \"0.1.0\"}",
+      "expected_entries_canonical": "[{\"dst\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2.jsonl\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"conversation\", \"src\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2.jsonl\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2.meta.json\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"conversation\", \"src\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2.meta.json\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2.file-rollback.ndjson\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"conversation\", \"src\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2.file-rollback.ndjson\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"tool-results\", \"src\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/tasks/s-a2\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-a/tasks/s-a2\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/changes-detail/s-a2\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-a/changes-detail/s-a2\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/changes-index/s-a2\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-a/changes-index/s-a2\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/file-history/s-a2\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-a/file-history/s-a2\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/artifact-index/s-a2.json\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-a/artifact-index/s-a2.json\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/blobs\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"content-addressed union\", \"src\": \"/tmp/wb-plan-parity/home-a/blobs\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/skills\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"union\", \"src\": \"/tmp/wb-plan-parity/home-a/skills\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1.jsonl\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"conversation\", \"src\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1.jsonl\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1.meta.json\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"conversation\", \"src\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1.meta.json\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1.file-rollback.ndjson\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"conversation\", \"src\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1.file-rollback.ndjson\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"tool-results\", \"src\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/tasks/s-b1\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-b/tasks/s-b1\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/changes-detail/s-b1\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-b/changes-detail/s-b1\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/changes-index/s-b1\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-b/changes-index/s-b1\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/file-history/s-b1\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-b/file-history/s-b1\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/artifact-index/s-b1.json\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-b/artifact-index/s-b1.json\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/blobs\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"content-addressed union\", \"src\": \"/tmp/wb-plan-parity/home-b/blobs\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/skills\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"union\", \"src\": \"/tmp/wb-plan-parity/home-b/skills\"}]",
+      "expected_entry_count": 22,
+      "expected_entries": [
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2.jsonl",
+          "dst": "/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2.jsonl",
+          "note": "conversation"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2.meta.json",
+          "dst": "/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2.meta.json",
+          "note": "conversation"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2.file-rollback.ndjson",
+          "dst": "/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2.file-rollback.ndjson",
+          "note": "conversation"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2",
+          "dst": "/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2",
+          "note": "tool-results"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/tasks/s-a2",
+          "dst": "/tmp/wb-plan-parity/home-b/tasks/s-a2",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/changes-detail/s-a2",
+          "dst": "/tmp/wb-plan-parity/home-b/changes-detail/s-a2",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/changes-index/s-a2",
+          "dst": "/tmp/wb-plan-parity/home-b/changes-index/s-a2",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/file-history/s-a2",
+          "dst": "/tmp/wb-plan-parity/home-b/file-history/s-a2",
+          "note": "session asset"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/artifact-index/s-a2.json",
+          "dst": "/tmp/wb-plan-parity/home-b/artifact-index/s-a2.json",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/blobs",
+          "dst": "/tmp/wb-plan-parity/home-b/blobs",
+          "note": "content-addressed union"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/skills",
+          "dst": "/tmp/wb-plan-parity/home-b/skills",
+          "note": "union"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1.jsonl",
+          "dst": "/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1.jsonl",
+          "note": "conversation"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1.meta.json",
+          "dst": "/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1.meta.json",
+          "note": "conversation"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1.file-rollback.ndjson",
+          "dst": "/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1.file-rollback.ndjson",
+          "note": "conversation"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1",
+          "dst": "/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1",
+          "note": "tool-results"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/tasks/s-b1",
+          "dst": "/tmp/wb-plan-parity/home-a/tasks/s-b1",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/changes-detail/s-b1",
+          "dst": "/tmp/wb-plan-parity/home-a/changes-detail/s-b1",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/changes-index/s-b1",
+          "dst": "/tmp/wb-plan-parity/home-a/changes-index/s-b1",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/file-history/s-b1",
+          "dst": "/tmp/wb-plan-parity/home-a/file-history/s-b1",
+          "note": "session asset"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/artifact-index/s-b1.json",
+          "dst": "/tmp/wb-plan-parity/home-a/artifact-index/s-b1.json",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/blobs",
+          "dst": "/tmp/wb-plan-parity/home-a/blobs",
+          "note": "content-addressed union"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/skills",
+          "dst": "/tmp/wb-plan-parity/home-a/skills",
+          "note": "union"
+        }
+      ],
+      "expected_skipped": {
+        "a2b": {
+          "sessions": 1
+        },
+        "b2a": {
+          "sessions": 1
+        }
+      }
+    },
+    {
+      "label": "all_options",
+      "options": {
+        "include_changes": true,
+        "include_skills": true,
+        "include_plugins": true,
+        "include_automations": true,
+        "include_storage": true,
+        "include_connectors": true,
+        "include_claw": true,
+        "include_memory": true,
+        "overwrite_assets": false
+      },
+      "expected_plan_id": "b8e57168061dcb59c393e9df91aa6ee936f3a80a301ac887c81f9bad592d2fc1",
+      "expected_body_canonical": "{\"entries_fingerprint\": \"6c2ae636be1ea6f5d0f23ba07709bb03b538f863ac3e7d2b3189021b3ac9fe4c\", \"home_a\": \"/tmp/wb-plan-parity/home-a\", \"home_b\": \"/tmp/wb-plan-parity/home-b\", \"options\": {\"include_automations\": true, \"include_changes\": true, \"include_claw\": true, \"include_connectors\": true, \"include_memory\": true, \"include_plugins\": true, \"include_skills\": true, \"include_storage\": true, \"overwrite_assets\": false}, \"source_fingerprints\": {\"a2b\": {\"automations_all\": \"58020043ca3d92eea85a8ec9b9a42b457407e74d98167a93c664f5123af95909\", \"sessions_all\": \"92f05ba8b081b96d6f55ec7ed9376da830dabb8af50e8b996f3ac27ac2a6ba81\"}, \"b2a\": {\"automations_all\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"sessions_all\": \"160ac12108f8f075ac9bb220085ebcb39f26825354fafef373839eaf2aa2a52f\"}}, \"uid_a\": \"0f1e2d3c-aaaa-4bbb-8ccc-000000000001\", \"uid_b\": \"8f7e6d5c-bbbb-4ccc-8ddd-000000000002\", \"version\": \"0.1.0\"}",
+      "expected_entries_canonical": "[{\"dst\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2.jsonl\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"conversation\", \"src\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2.jsonl\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2.meta.json\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"conversation\", \"src\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2.meta.json\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2.file-rollback.ndjson\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"conversation\", \"src\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2.file-rollback.ndjson\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"tool-results\", \"src\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/tasks/s-a2\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-a/tasks/s-a2\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/changes-detail/s-a2\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-a/changes-detail/s-a2\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/changes-index/s-a2\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-a/changes-index/s-a2\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/file-history/s-a2\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-a/file-history/s-a2\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/artifact-index/s-a2.json\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-a/artifact-index/s-a2.json\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/blobs\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"content-addressed union\", \"src\": \"/tmp/wb-plan-parity/home-a/blobs\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/skills\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"union\", \"src\": \"/tmp/wb-plan-parity/home-a/skills\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/plugins/cache\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"union\", \"src\": \"/tmp/wb-plan-parity/home-a/plugins/cache\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/connectors/skills\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"connector skills\", \"src\": \"/tmp/wb-plan-parity/home-a/connectors/skills\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/storage/user-8f7e6d5c-bbbb-4ccc-8ddd-000000000002\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"account storage (merge-if-missing)\", \"src\": \"/tmp/wb-plan-parity/home-a/storage/user-0f1e2d3c-aaaa-4bbb-8ccc-000000000001\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/storage/user-8f7e6d5c-bbbb-4ccc-8ddd-000000000002-personal\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"account storage (merge-if-missing)\", \"src\": \"/tmp/wb-plan-parity/home-a/storage/user-0f1e2d3c-aaaa-4bbb-8ccc-000000000001-personal\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/connectors/8f7e6d5c-bbbb-4ccc-8ddd-000000000002/connector-states.json\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"connector state (no credentials)\", \"src\": \"/tmp/wb-plan-parity/home-a/connectors/0f1e2d3c-aaaa-4bbb-8ccc-000000000001/connector-states.json\"}, {\"dst\": \"/tmp/wb-plan-parity/home-b/connectors/8f7e6d5c-bbbb-4ccc-8ddd-000000000002/mcp.json\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"connector state (no credentials)\", \"src\": \"/tmp/wb-plan-parity/home-a/connectors/0f1e2d3c-aaaa-4bbb-8ccc-000000000001/mcp.json\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1.jsonl\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"conversation\", \"src\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1.jsonl\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1.meta.json\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"conversation\", \"src\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1.meta.json\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1.file-rollback.ndjson\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"conversation\", \"src\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1.file-rollback.ndjson\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"tool-results\", \"src\": \"/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/tasks/s-b1\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-b/tasks/s-b1\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/changes-detail/s-b1\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-b/changes-detail/s-b1\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/changes-index/s-b1\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-b/changes-index/s-b1\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/file-history/s-b1\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-b/file-history/s-b1\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/artifact-index/s-b1.json\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"session asset\", \"src\": \"/tmp/wb-plan-parity/home-b/artifact-index/s-b1.json\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/blobs\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"content-addressed union\", \"src\": \"/tmp/wb-plan-parity/home-b/blobs\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/skills\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"union\", \"src\": \"/tmp/wb-plan-parity/home-b/skills\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/plugins/cache\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"union\", \"src\": \"/tmp/wb-plan-parity/home-b/plugins/cache\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/connectors/skills\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"connector skills\", \"src\": \"/tmp/wb-plan-parity/home-b/connectors/skills\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/storage/user-0f1e2d3c-aaaa-4bbb-8ccc-000000000001\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"account storage (merge-if-missing)\", \"src\": \"/tmp/wb-plan-parity/home-b/storage/user-8f7e6d5c-bbbb-4ccc-8ddd-000000000002\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/storage/user-0f1e2d3c-aaaa-4bbb-8ccc-000000000001-personal\", \"kind\": \"tree\", \"mode\": \"copy_tree_if_missing\", \"note\": \"account storage (merge-if-missing)\", \"src\": \"/tmp/wb-plan-parity/home-b/storage/user-8f7e6d5c-bbbb-4ccc-8ddd-000000000002-personal\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/connectors/0f1e2d3c-aaaa-4bbb-8ccc-000000000001/connector-states.json\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"connector state (no credentials)\", \"src\": \"/tmp/wb-plan-parity/home-b/connectors/8f7e6d5c-bbbb-4ccc-8ddd-000000000002/connector-states.json\"}, {\"dst\": \"/tmp/wb-plan-parity/home-a/connectors/0f1e2d3c-aaaa-4bbb-8ccc-000000000001/mcp.json\", \"kind\": \"file\", \"mode\": \"copy_if_missing\", \"note\": \"connector state (no credentials)\", \"src\": \"/tmp/wb-plan-parity/home-b/connectors/8f7e6d5c-bbbb-4ccc-8ddd-000000000002/mcp.json\"}]",
+      "expected_entry_count": 34,
+      "expected_entries": [
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2.jsonl",
+          "dst": "/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2.jsonl",
+          "note": "conversation"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2.meta.json",
+          "dst": "/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2.meta.json",
+          "note": "conversation"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2.file-rollback.ndjson",
+          "dst": "/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2.file-rollback.ndjson",
+          "note": "conversation"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/projects/slug-s-a2/s-a2",
+          "dst": "/tmp/wb-plan-parity/home-b/projects/slug-s-a2/s-a2",
+          "note": "tool-results"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/tasks/s-a2",
+          "dst": "/tmp/wb-plan-parity/home-b/tasks/s-a2",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/changes-detail/s-a2",
+          "dst": "/tmp/wb-plan-parity/home-b/changes-detail/s-a2",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/changes-index/s-a2",
+          "dst": "/tmp/wb-plan-parity/home-b/changes-index/s-a2",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/file-history/s-a2",
+          "dst": "/tmp/wb-plan-parity/home-b/file-history/s-a2",
+          "note": "session asset"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/artifact-index/s-a2.json",
+          "dst": "/tmp/wb-plan-parity/home-b/artifact-index/s-a2.json",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/blobs",
+          "dst": "/tmp/wb-plan-parity/home-b/blobs",
+          "note": "content-addressed union"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/skills",
+          "dst": "/tmp/wb-plan-parity/home-b/skills",
+          "note": "union"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/plugins/cache",
+          "dst": "/tmp/wb-plan-parity/home-b/plugins/cache",
+          "note": "union"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/connectors/skills",
+          "dst": "/tmp/wb-plan-parity/home-b/connectors/skills",
+          "note": "connector skills"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/storage/user-0f1e2d3c-aaaa-4bbb-8ccc-000000000001",
+          "dst": "/tmp/wb-plan-parity/home-b/storage/user-8f7e6d5c-bbbb-4ccc-8ddd-000000000002",
+          "note": "account storage (merge-if-missing)"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/storage/user-0f1e2d3c-aaaa-4bbb-8ccc-000000000001-personal",
+          "dst": "/tmp/wb-plan-parity/home-b/storage/user-8f7e6d5c-bbbb-4ccc-8ddd-000000000002-personal",
+          "note": "account storage (merge-if-missing)"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/connectors/0f1e2d3c-aaaa-4bbb-8ccc-000000000001/connector-states.json",
+          "dst": "/tmp/wb-plan-parity/home-b/connectors/8f7e6d5c-bbbb-4ccc-8ddd-000000000002/connector-states.json",
+          "note": "connector state (no credentials)"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-a/connectors/0f1e2d3c-aaaa-4bbb-8ccc-000000000001/mcp.json",
+          "dst": "/tmp/wb-plan-parity/home-b/connectors/8f7e6d5c-bbbb-4ccc-8ddd-000000000002/mcp.json",
+          "note": "connector state (no credentials)"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1.jsonl",
+          "dst": "/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1.jsonl",
+          "note": "conversation"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1.meta.json",
+          "dst": "/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1.meta.json",
+          "note": "conversation"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1.file-rollback.ndjson",
+          "dst": "/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1.file-rollback.ndjson",
+          "note": "conversation"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/projects/slug-s-b1/s-b1",
+          "dst": "/tmp/wb-plan-parity/home-a/projects/slug-s-b1/s-b1",
+          "note": "tool-results"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/tasks/s-b1",
+          "dst": "/tmp/wb-plan-parity/home-a/tasks/s-b1",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/changes-detail/s-b1",
+          "dst": "/tmp/wb-plan-parity/home-a/changes-detail/s-b1",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/changes-index/s-b1",
+          "dst": "/tmp/wb-plan-parity/home-a/changes-index/s-b1",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/file-history/s-b1",
+          "dst": "/tmp/wb-plan-parity/home-a/file-history/s-b1",
+          "note": "session asset"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/artifact-index/s-b1.json",
+          "dst": "/tmp/wb-plan-parity/home-a/artifact-index/s-b1.json",
+          "note": "session asset"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/blobs",
+          "dst": "/tmp/wb-plan-parity/home-a/blobs",
+          "note": "content-addressed union"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/skills",
+          "dst": "/tmp/wb-plan-parity/home-a/skills",
+          "note": "union"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/plugins/cache",
+          "dst": "/tmp/wb-plan-parity/home-a/plugins/cache",
+          "note": "union"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/connectors/skills",
+          "dst": "/tmp/wb-plan-parity/home-a/connectors/skills",
+          "note": "connector skills"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/storage/user-8f7e6d5c-bbbb-4ccc-8ddd-000000000002",
+          "dst": "/tmp/wb-plan-parity/home-a/storage/user-0f1e2d3c-aaaa-4bbb-8ccc-000000000001",
+          "note": "account storage (merge-if-missing)"
+        },
+        {
+          "kind": "tree",
+          "mode": "copy_tree_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/storage/user-8f7e6d5c-bbbb-4ccc-8ddd-000000000002-personal",
+          "dst": "/tmp/wb-plan-parity/home-a/storage/user-0f1e2d3c-aaaa-4bbb-8ccc-000000000001-personal",
+          "note": "account storage (merge-if-missing)"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/connectors/8f7e6d5c-bbbb-4ccc-8ddd-000000000002/connector-states.json",
+          "dst": "/tmp/wb-plan-parity/home-a/connectors/0f1e2d3c-aaaa-4bbb-8ccc-000000000001/connector-states.json",
+          "note": "connector state (no credentials)"
+        },
+        {
+          "kind": "file",
+          "mode": "copy_if_missing",
+          "src": "/tmp/wb-plan-parity/home-b/connectors/8f7e6d5c-bbbb-4ccc-8ddd-000000000002/mcp.json",
+          "dst": "/tmp/wb-plan-parity/home-a/connectors/0f1e2d3c-aaaa-4bbb-8ccc-000000000001/mcp.json",
+          "note": "connector state (no credentials)"
+        }
+      ],
+      "expected_skipped": {
+        "a2b": {
+          "sessions": 1
+        },
+        "b2a": {
+          "sessions": 1
+        }
+      }
+    }
+  ]
+}

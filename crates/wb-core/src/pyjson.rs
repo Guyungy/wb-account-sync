@@ -75,6 +75,40 @@ impl PyValue {
             _ => false,
         }
     }
+
+    /// 按键取值（`Map` 与 `Ordered` 都支持）。别的一律 `None`。
+    ///
+    /// `Ordered` 是线性查找 —— 行只有十几列，不值得为此换个数据结构。
+    pub fn get(&self, key: &str) -> Option<&PyValue> {
+        match self {
+            PyValue::Map(m) => m.get(key),
+            PyValue::Ordered(pairs) => pairs.iter().find(|(k, _)| k == key).map(|(_, v)| v),
+            _ => None,
+        }
+    }
+
+    /// 取字符串值。类型不符时返回 `None`，不抛错 ——
+    /// 外部 JSON（账号快照之类）里字段类型不由我们控制。
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            PyValue::Str(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// 真值判定，对齐 Python 的 `if x:` —— `0` / `""` / `null` / 空容器都算假。
+    pub fn is_truthy(&self) -> bool {
+        match self {
+            PyValue::Null => false,
+            PyValue::Bool(b) => *b,
+            PyValue::Int(i) => *i != 0,
+            PyValue::Float(f) => *f != 0.0,
+            PyValue::Str(s) => !s.is_empty(),
+            PyValue::Array(items) => !items.is_empty(),
+            PyValue::Map(m) => !m.is_empty(),
+            PyValue::Ordered(m) => !m.is_empty(),
+        }
+    }
 }
 
 impl From<&str> for PyValue {
@@ -388,8 +422,36 @@ pub fn sha256_text(text: &str) -> String {
 }
 
 /// 把值按 CPython 规则编码后取 SHA-256。`plan_id` 就是这么来的。
+///
+/// ⚠️ **要求传入的值已经"规范化"**（见 [`canonicalize`]）。
+/// `dumps` 只对 `Map`（`BTreeMap`）排序，对 `Ordered` 是按原序输出 ——
+/// 所以拿 `Ordered` 去哈希**不会**得到 Python `sort_keys=True` 的结果。
+/// 想要后者，先 `canonicalize`。
 pub fn hash_json(v: &PyValue) -> String {
     sha256_text(&dumps(v))
+}
+
+/// 递归地把所有 `Ordered` 折成 `Map`，即 CPython `sort_keys=True` 的等价物。
+///
+/// **为什么需要它。** 同一份数据在两处用途不同：写进计划文件时要**保序**
+/// （可读、可 diff，与 Python 的 `json.dump(indent=2)` 一致），
+/// 而算指纹时要**排序**（`sort_keys=True`）。如果为了省事只留一种表示，
+/// 那么要么文件里的键序被打乱，要么哈希静默算错 —— 后者尤其危险，
+/// 因为它不会报错，只会让两边的 `plan_id` 对不上，然后你在几百行代码里找原因。
+pub fn canonicalize(v: &PyValue) -> PyValue {
+    match v {
+        PyValue::Array(items) => PyValue::Array(items.iter().map(canonicalize).collect()),
+        PyValue::Map(m) => {
+            PyValue::Map(m.iter().map(|(k, val)| (k.clone(), canonicalize(val))).collect())
+        }
+        PyValue::Ordered(pairs) => PyValue::Map(
+            pairs
+                .iter()
+                .map(|(k, val)| (k.clone(), canonicalize(val)))
+                .collect::<BTreeMap<_, _>>(),
+        ),
+        other => other.clone(),
+    }
 }
 
 #[cfg(test)]

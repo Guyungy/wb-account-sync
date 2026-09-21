@@ -1,5 +1,34 @@
 # 更新记录
 
+## 未发布 — 底座改 Rust + TypeScript（第三步：plan 与 plan_id 对账通过）
+
+**`plan_id` 与 Python 逐字节一致 —— 这是整个迁移的唯一验收标准，已达成。**
+
+- **Rust：新增 `wb-core::plan`** —— 迁移计划的构造（`collect_rows` /
+  `build_direction_entries` / `build_plan`）与 `plan_id` 的计算。
+  引入 `rusqlite`（`bundled`，自带 SQLite 源码，不依赖系统库）。
+- **`pyjson` 补 `canonicalize`**：把保序结构递归折成排序结构，即 `sort_keys=True`
+  的等价物。同一份数据有两处用途 —— 写进计划文件要**保序**（可读可 diff），
+  算指纹要**排序**。只留一种表示的话，要么文件键序被打乱，要么哈希静默算错；
+  后者尤其危险，它不报错，只让你在几百行代码里找为什么两个 plan_id 不一样。
+- **`plan_id` 的正文刻意不含 `created_at`**，也不含行数据 —— 否则同一份数据在不同
+  时刻会得到不同指纹，「先退客户端再建计划、执行前复核指纹」这套防漂移机制立刻失效。
+- **夹具存的是「被哈希的那串规范编码原文」，不只是哈希。** 只比哈希的话失败信息
+  是一串十六进制，你只知道不一样、不知道哪里不一样；存原文，diff 会直接指出字段。
+  哈希仍一并比对，因为它才是最终产物。
+- **夹具用固定路径 `/tmp/wb-plan-parity/`**（不是 `tempfile.mkdtemp()`）：
+  正文里含 home 的绝对路径，两边必须跑在同一份路径上才能对账。
+- **夹具里埋了一个 `connectors/<uid>/.master.key`**，并有一条断言守它
+  「绝不能出现在计划里」。反向也有一条：夹具里必须真的存在这个文件，
+  否则那条断言只是在证明一个不存在的东西没出现。
+- **抓到一处会让改动白做的忽略规则**：`.gitignore` 里的 `plan*.json` 会把
+  `tests/fixtures/plan_golden.json` 一起吞掉 —— 夹具不入库，CI 上 Rust 测试
+  直接找不到文件。已加 `!tests/fixtures/*.json` 例外，并确认 `plan-abc.json`
+  之类仍被忽略（例外没放太宽）。
+
+验证：Rust 34 项、Python 191 项全绿；两个用例（默认勾选 / 全开）的正文规范编码、
+条目、跳过计数、`plan_id` 全部一致。
+
 ## 未发布 — 底座改 Rust + TypeScript（第二步：home 与前端骨架）
 
 **形态改定：桌面壳从自建 `wry + tao` 改为 Tauri 2。** 理由是窗口/菜单/打包/更新
