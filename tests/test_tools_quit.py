@@ -5,6 +5,7 @@
 WorkBuddy 关掉——那才是真正的破坏性副作用。
 """
 
+import io
 import os
 import sys
 import unittest
@@ -101,33 +102,138 @@ class QuitClientsTest(unittest.TestCase):
 
 
 class RequestQuitTest(unittest.TestCase):
+    """``request_quit`` 的分支选择。
+
+    **这几条必须显式声明自己模拟哪个平台。** ``request_quit`` 读的是模块级
+    ``IS_MAC`` / ``IS_WIN``，依赖宿主平台的话：在 Linux 上 osascript 分支
+    整个被跳过，断言直接失败；而在 macOS 上"通过"也只是因为宿主恰好是 mac，
+    并没有真正断言到分支选择。显式 patch 之后，任何平台上跑的都是同一套逻辑。
+    """
+
+    @staticmethod
+    def _as(platform_name: str):
+        """把 ``request_quit`` 眼中的平台固定成 platform_name。"""
+        return mock.patch.multiple(
+            platform,
+            IS_MAC=(platform_name == "mac"),
+            IS_WIN=(platform_name == "win"),
+            IS_LINUX=(platform_name == "linux"),
+        )
+
     def test_macos_prefers_osascript_then_falls_back(self):
         spec = platform.CLIENTS_BY_KEY["wb"]
         # osascript 成功：不再发信号。
-        with mock.patch.object(platform, "_run_check", return_value=True) as run:
-            with mock.patch.object(platform, "_pids_of") as pids:
-                self.assertTrue(platform.request_quit(spec, force=False))
+        with self._as("mac"):
+            with mock.patch.object(platform, "_run_check", return_value=True) as run:
+                with mock.patch.object(platform, "_pids_of") as pids:
+                    self.assertTrue(platform.request_quit(spec, force=False))
         run.assert_called_once()
         self.assertIn('tell application "WorkBuddy" to quit', run.call_args[0][0][2])
         pids.assert_not_called()
 
     def test_macos_falls_back_to_signal_when_osascript_fails(self):
         spec = platform.CLIENTS_BY_KEY["wb"]
-        with mock.patch.object(platform, "_run_check", return_value=False):
-            with mock.patch.object(platform, "_pids_of", return_value=[4242]) as pids:
-                with mock.patch.object(platform, "_signal_pids", return_value=True) as sig:
-                    self.assertTrue(platform.request_quit(spec, force=False))
+        with self._as("mac"):
+            with mock.patch.object(platform, "_run_check", return_value=False):
+                with mock.patch.object(platform, "_pids_of", return_value=[4242]) as pids:
+                    with mock.patch.object(platform, "_signal_pids", return_value=True) as sig:
+                        self.assertTrue(platform.request_quit(spec, force=False))
         pids.assert_called_once_with("wb")
         self.assertFalse(sig.call_args[0][1])
 
     def test_force_skips_osascript(self):
         spec = platform.CLIENTS_BY_KEY["wb_ai"]
-        with mock.patch.object(platform, "_run_check") as run:
-            with mock.patch.object(platform, "_pids_of", return_value=[7]):
-                with mock.patch.object(platform, "_signal_pids", return_value=True) as sig:
-                    platform.request_quit(spec, force=True)
+        with self._as("mac"):
+            with mock.patch.object(platform, "_run_check") as run:
+                with mock.patch.object(platform, "_pids_of", return_value=[7]):
+                    with mock.patch.object(platform, "_signal_pids", return_value=True) as sig:
+                        platform.request_quit(spec, force=True)
         run.assert_not_called()
         self.assertTrue(sig.call_args[0][1])
+
+    def test_windows_uses_taskkill(self):
+        """Windows 分支此前没有测试覆盖，而这条路径只在真机 Windows 上跑过 ——
+        显式模拟平台之后，CI 上也能守住它。"""
+        spec = platform.CLIENTS_BY_KEY["wb"]
+        # force=True 时 taskkill 要带 /F
+        with self._as("win"):
+            with mock.patch.object(platform, "_run_check", return_value=True) as run:
+                self.assertTrue(platform.request_quit(spec, force=True))
+        run.assert_called_once_with(["taskkill", "/IM", spec.win_image, "/F"])
+
+        with self._as("win"):
+            with mock.patch.object(platform, "_run_check", return_value=True) as run:
+                platform.request_quit(spec, force=False)
+        run.assert_called_once_with(["taskkill", "/IM", spec.win_image])
+
+    def test_linux_signals_pids_without_osascript(self):
+        """Linux 上没有 AppleEvent 也没有 taskkill，只能发信号。"""
+        spec = platform.CLIENTS_BY_KEY["wb"]
+        with self._as("linux"):
+            with mock.patch.object(platform, "_run_check") as run:
+                with mock.patch.object(platform, "_pids_of", return_value=[11]) as pids:
+                    with mock.patch.object(platform, "_signal_pids", return_value=True) as sig:
+                        self.assertTrue(platform.request_quit(spec, force=False))
+        run.assert_not_called()
+        pids.assert_called_once_with("wb")
+        self.assertFalse(sig.call_args[0][1])
+
+
+class LinuxScanTest(unittest.TestCase):
+    """``_scan_linux`` 按 ``/proc/<pid>/cmdline`` 里 ``argv[0]`` 的文件名**精确相等**匹配。
+
+    为什么要单独测这条：它在 macOS 上根本跑不到（读的是 ``/proc``）。
+    而 ``test_go_ui_parity`` 里「真的有客户端在跑」这个前提，在 Linux CI 上
+    正是靠放一个同名真进程来满足的 —— 匹配逻辑一旦变了，那条测试不是变成
+    「跳过」，而是**直接挂到超时**（旧写法就是这么红的）。
+    所以这里用假的 ``/proc`` 把匹配口径钉死，不必依赖真 Linux 环境。
+    """
+
+    PIDS = ("4242", "4243", "4244")
+
+    def _scan(self, cmdlines: dict[str, bytes]) -> dict:
+        found = {spec.key: [] for spec in platform.CLIENTS}
+
+        def fake_listdir(path):
+            self.assertEqual("/proc", path)
+            # 混入非数字条目：内核线程与统计文件都必须被跳过
+            return list(self.PIDS) + ["self", "meminfo", "sys"]
+
+        def fake_open(path, mode="r", *args, **kwargs):
+            for pid, raw in cmdlines.items():
+                if path == f"/proc/{pid}/cmdline":
+                    return io.BytesIO(raw)
+            raise FileNotFoundError(path)
+
+        with mock.patch.object(platform.os, "listdir", side_effect=fake_listdir):
+            with mock.patch.object(platform, "open", side_effect=fake_open, create=True):
+                platform._scan_linux(found)
+        return found
+
+    def test_matches_exact_basename_only(self):
+        found = self._scan({
+            "4242": b"/opt/workbuddy\x00",
+            "4243": b"/opt/workbuddy-ai\x00",
+            # 包含关系不算命中："workbuddy" 不能把 "workbuddy-helper" 也吃掉
+            "4244": b"/opt/workbuddy-helper\x00",
+        })
+        self.assertEqual([p["pid"] for p in found["wb"]], [4242])
+        self.assertEqual([p["pid"] for p in found["wb_ai"]], [4243])
+
+    def test_takes_basename_of_full_path(self):
+        found = self._scan({"4242": b"/Applications/workbuddy\x00--flag\x00"})
+        self.assertEqual([p["pid"] for p in found["wb"]], [4242])
+
+    def test_keyword_arguments_are_not_treated_as_names(self):
+        # argv[0] 之外的参数里出现同样的词，不能误判
+        found = self._scan({"4242": b"/usr/bin/sleep\x00workbuddy\x00"})
+        self.assertEqual(found["wb"], [])
+
+    def test_empty_cmdline_is_skipped(self):
+        # 内核线程的 cmdline 是空的，不能因此炸掉整个探测
+        found = self._scan({"4242": b""})
+        self.assertEqual(found["wb"], [])
+        self.assertEqual(found["wb_ai"], [])
 
 
 if __name__ == "__main__":

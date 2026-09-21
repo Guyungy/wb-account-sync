@@ -61,6 +61,61 @@ def free_port():
         return s.getsockname()[1]
 
 
+def _terminate(proc) -> None:
+    if proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
+
+
+def _ensure_running_client(case: unittest.TestCase) -> None:
+    """让「真的有客户端在跑」这个前提成立；做不到就 skip。
+
+    **为什么需要这个函数。** 原来那条断言只在「开发者本机恰好开着客户端」
+    时才通过：客户端没开时，服务端不返回 409，而是走进 SSE 分支开一条流去
+    执行迁移；测试这边是 ``resp.read()``，会一直读到流关闭，于是挂到 30 秒
+    超时。Linux CI 上本来就没有 WorkBuddy 客户端 —— 它不但没覆盖到，
+    还把 CI 弄红了。而 ``skipTest`` 原先写在请求**之后**，永远来不及执行。
+
+    所以顺序反过来：先确认前提，再发请求。
+
+    - **macOS**：按 bundle 路径匹配（Electron 的 argv[0] 就是 ``Electron``，
+      不能按进程名匹配），造不出替身，只能靠真客户端；没有就跳过。
+    - **Linux**：按 ``/proc/<pid>/cmdline`` 的 ``argv[0]`` 文件名**精确相等**
+      匹配，所以放一个名字对得上的真进程就能满足前提。
+
+    替身是**真进程**，走的是产品自己的探测代码 —— 而不是把探测函数 mock 掉。
+    mock 掉就只证明了「我 patch 的返回值被读到」，证明不了真实探测行为。
+    """
+    sys.path.insert(0, TOOLS)
+    import wb_platform  # noqa: PLC0415
+
+    if wb_platform.running_clients():
+        return  # 本机真有客户端，用它
+
+    if not sys.platform.startswith("linux"):
+        case.skipTest("本机没有客户端在运行，且该平台造不出替身")
+
+    sleep = shutil.which("sleep") or "/bin/sleep"
+    tmp = tempfile.mkdtemp(prefix="wb-fake-client-")
+    case.addCleanup(shutil.rmtree, tmp, True)
+    for image in ("workbuddy", "workbuddy-ai"):
+        target = os.path.join(tmp, image)
+        shutil.copy2(sleep, target)  # copy2 保留可执行位
+        case.addCleanup(_terminate, subprocess.Popen([target, "300"]))
+
+    # 等探测真的看见它们再往下走，别靠 sleep 猜。
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        if len(wb_platform.running_clients()) >= 2:
+            return
+        time.sleep(0.2)
+    case.fail("替身进程起来了，但探测没认出来 —— 探测逻辑可能变了")
+
+
 def _session(sid, cwd, uid, **over):
     row = dict.fromkeys(SESSION_COLUMNS)
     row.update({
@@ -394,19 +449,22 @@ class GoUiParityTest(unittest.TestCase):
     def test_apply_refuses_while_client_running(self):
         """客户端在跑时必须两边都拒绝，且提示同一件事。
 
-        夹具是合成的，但"WorkBuddy 是否在运行"探测的是真实进程——
-        本机运行测试时客户端确实在跑，所以这里断言的是 409 与提示语。
-        若真机上客户端恰好没开，则跳过（不算失败，因为前提不成立）。
+        前提（真的有客户端在跑）由 ``_ensure_running_client`` 先保证：
+        满足不了就跳过，**绝不**在前提不成立时去发 ``/api/apply`` ——
+        那时服务端不返回 409，而是走进 SSE 分支开一条流执行迁移，
+        而测试读的是 ``resp.read()``，会一直读到流关闭，直接挂到超时。
+        Linux CI 上正是这样红过一次（macOS 上因为本机真有客户端走 409 分支，
+        所以一直没暴露）。
         """
+        _ensure_running_client(self)
         py, go = self._start_py(), self._start_go()
         out = []
-        for srv in (py, go):
+        for srv, name in ((py, "python"), (go, "go")):
             _s, body = srv.request("POST", "/api/plan", {})
             plan_id = json.loads(body)["plan_id"]
             code, resp = srv.request("GET", f"/api/apply?plan_id={plan_id}")
+            self.assertEqual(code, 409, f"{name}：客户端在跑，apply 竟然没被拒绝")
             out.append((code, json.loads(resp)))
-        if out[0][0] == 200:
-            self.skipTest("本机没有客户端在运行，这条前提不成立")
         self.assertEqual(out[0][0], out[1][0], "两边对「客户端在跑」的判断不同")
         self.assertIn("仍在运行", out[0][1]["error"])
         self.assertEqual(out[0][1]["error"], out[1][1]["error"],
