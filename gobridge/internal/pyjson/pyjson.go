@@ -325,6 +325,25 @@ type KV struct {
 	Val any
 }
 
+// MarshalJSON 让 OrderedMap 在标准库 encoding/json 下也编码成**对象**。
+//
+// 不加这个方法时，OrderedMap 在标准库眼里就是一个 []KV，会被写成
+// `[{"Key":"a","Val":1}]` —— 形状完全不对，而且**不报任何错**。
+// 保序类型只在自己家的编码器里正确，这个陷阱足够隐蔽：CLI 的 emitJSON
+// 走的是标准库，于是 `survey --json` 的顶层一度变成了数组。
+//
+// 标准库在缩进模式下会 compact 我们的返回值再套用缩进，所以这里给紧凑形式即可。
+func (m OrderedMap) MarshalJSON() ([]byte, error) {
+	s, err := Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(s), nil
+}
+
+// UnmarshalJSON 在需要把 JSON 读回成保序结构时才实现；
+// 目前所有读路径都走 Node（见 ordered.go），没有消费者，先不引入。
+
 func encodeMap(sb *strings.Builder, m map[string]any) error {
 	keys := make([]string, 0, len(m))
 	for k := range m {

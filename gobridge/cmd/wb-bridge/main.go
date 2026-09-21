@@ -8,12 +8,14 @@
 package main
 
 import (
+	"bufio"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -52,6 +54,8 @@ func run(argv []string) int {
 		return cmdSurvey(argv[1:])
 	case "plan":
 		return cmdPlan(argv[1:])
+	case "sync":
+		return cmdSync(argv[1:])
 	case "serve", "ui":
 		return cmdServe(argv[1:])
 	case "apply":
@@ -81,17 +85,24 @@ func usage() {
   wb-bridge plan          [--json] [--output 文件] [--home-a 路径] [--home-b 路径] [选项]
   wb-bridge serve         [--port 端口] [--no-open] [--token 字符串] [--handshake]
                           启动本地浏览器界面（只绑 127.0.0.1，必须带 token 访问）
+  wb-bridge sync          [--yes] [--dry-run] [--force] [--wait 秒] [--state-dir 目录]
+                          一键：退出客户端 → 生成计划 → 确认 → 执行 → 核验
   wb-bridge apply         --plan 文件 --state-dir 目录 --confirm plan_id
   wb-bridge verify        --plan 文件
   wb-bridge backup        --dest 目录 [--label 标签] [--include-heavy]
   wb-bridge restore       --run-dir 目录 --confirm plan_id
+
+sync 选项：
+  --dry-run   只走到「生成计划」，不退出客户端也不写数据（可用于预演）
+  --yes       跳过终端确认（供脚本/自动化使用）
+  --force     宽限期内没退干净时授权强制结束客户端
 
 plan 选项（默认只开 changes / skills / memory / claw）：
   --no-changes --no-skills --no-memory --no-claw
   --include-plugins --include-automations --include-storage
   --include-connectors --overwrite-assets
 
-写操作（apply / backup）默认要求两个客户端都已退出；确知无写入冲突时
+写操作（apply / backup / sync）默认要求两个客户端都已退出；确知无写入冲突时
 可用 --allow-client-running 绕过，风险自负。
 `)
 }
@@ -116,6 +127,8 @@ type flags struct {
 	includeHeavy bool
 	runDir       string
 	allowRunning bool
+	yes          bool
+	dryRun       bool
 	port         int
 	noOpen       bool
 	token        string
@@ -141,6 +154,10 @@ func parseFlags(argv []string) (*flags, error) {
 			f.force = true
 		case arg == "--allow-client-running":
 			f.allowRunning = true
+		case arg == "--yes" || arg == "-y":
+			f.yes = true
+		case arg == "--dry-run":
+			f.dryRun = true
 		case arg == "--include-heavy":
 			f.includeHeavy = true
 		case arg == "--no-open":
@@ -419,7 +436,17 @@ func cmdSurvey(argv []string) int {
 		return fail(err)
 	}
 	if f.json {
-		return emitJSON(map[string]any{"homes": []any{infoA, infoB}})
+		// version 是 survey 顶层的契约字段之一（Python 侧一直有）。
+		// 它跟 CLI 自己的版本号不是一回事：它是「调查结果格式」的版本，
+		// 用来让消费方判断字段含义有没有变，所以取的是引擎的 Version。
+		//
+		// 用 map 而不是保序结构：标准库对 map 会按键排序输出，
+		// 与 Python 侧 json.dumps(sort_keys=True) 的顺序一致，
+		// 这样两边的 stdout 除了值以外连顺序都对得上。
+		return emitJSON(map[string]any{
+			"version": bridge.Version,
+			"homes":   []any{infoA, infoB},
+		})
 	}
 	for _, info := range []map[string]any{infoA, infoB} {
 		fmt.Printf("[%v] %v\n  %v\n", info["label"], info["path"], info["counts"])
@@ -524,6 +551,19 @@ func cmdPlan(argv []string) int {
 // 引擎本身不打印，是为了让 CLI 与 HTTP UI 能用不同的方式消费同一份事件流。
 func logLine(msg string)  { fmt.Println(msg) }
 func warnLine(msg string) { fmt.Fprintln(os.Stderr, msg) }
+
+// logFor 返回该次调用应该使用的日志通道。
+//
+// --json 模式下 stdout 是给机器读的。一旦混进人类可读的进度行，
+// `wb-bridge verify --json | jq .` 会在第一个非 JSON 字符上失败——
+// 而且失败信息指向的是"JSON 解析错误"，跟真正的成因（日志混流）隔了一层。
+// 所以 --json 时把过程日志改道到 stderr：信息一点不丢，管道保持干净。
+func logFor(f *flags) func(string) {
+	if f.json {
+		return func(msg string) { fmt.Fprintln(os.Stderr, msg) }
+	}
+	return logLine
+}
 
 // requireClientsStopped 是写操作的前置守卫。
 //
@@ -676,11 +716,11 @@ func cmdApply(argv []string) int {
 		PlanPath: platform.ExpandPath(f.planPath),
 		Confirm:  f.confirm,
 		StateDir: f.stateDir,
-	}, logLine, warnLine)
+	}, logFor(f), warnLine)
 	if err != nil {
 		return fail(err)
 	}
-	fmt.Println("请重启两个 App 后再查看（客户端有内存缓存，不重启看不到新会话）。")
+	logFor(f)("请重启两个 App 后再查看（客户端有内存缓存，不重启看不到新会话）。")
 	if f.json {
 		return emitJSON(res)
 	}
@@ -706,7 +746,7 @@ func cmdBackup(argv []string) int {
 		Dest:         f.dest,
 		Label:        f.label,
 		IncludeHeavy: f.includeHeavy,
-	}, logLine)
+	}, logFor(f))
 	if err != nil {
 		return fail(err)
 	}
@@ -715,6 +755,184 @@ func cmdBackup(argv []string) int {
 	}
 	return 0
 }
+
+// cmdSync 把「退出客户端 → 生成计划 → 确认 → 执行 → 核验」串成一条命令。
+//
+// 值得固化的其实只有**顺序**：退出必须排在生成计划之前。
+// 反过来做有个很隐蔽的坑——客户端退出时会 flush 自己的状态，源侧指纹随即变化，
+// 执行阶段被引擎以"数据漂移"为由拒掉。报错指向的是指纹，看起来像工具坏了，
+// 实际是步骤顺序错了。把顺序写死在代码里，比写在使用者脑子里可靠。
+//
+// 另一个固化点是**没退干净就停**：客户端还在写的时候执行，最坏结果不是写入失败，
+// 而是写进去了、随后被客户端的退出 flush 覆盖掉——不报错的那种失败。
+func cmdSync(argv []string) int {
+	f, err := parseFlags(argv)
+	if err != nil {
+		return fail(err)
+	}
+	a, b, err := homes(f)
+	if err != nil {
+		return fail(err)
+	}
+	stateDir := platform.ExpandPath(firstNonEmpty(f.stateDir, defaultStateDir))
+
+	// ---------------- 1) 先退客户端 ----------------
+	if !f.dryRun {
+		running, err := platform.RunningClients()
+		if err != nil {
+			return fail(err)
+		}
+		if len(running) == 0 {
+			logFor(f)("两个客户端本来就没在运行。")
+		} else {
+			logFor(f)("正在请求退出：" + joinDisplays(statusNames(running)))
+			wait := platform.QuitGrace
+			if f.wait > 0 {
+				wait = f.wait
+			}
+			res, err := platform.QuitClients(wait, 10*time.Second, f.force)
+			if err != nil {
+				return fail(err)
+			}
+			if !res.OK {
+				return fail(fmt.Errorf(
+					"%s 仍在运行，已中止。请手动退出后重试，或加 --force 授权强制结束",
+					joinDisplays(quitNames(res.Remaining))))
+			}
+			logFor(f)("两个客户端都已退出。")
+		}
+	}
+
+	// ---------------- 2) 生成计划 ----------------
+	plan, err := bridge.BuildPlan(a, b, f.options)
+	if err != nil {
+		return fail(err)
+	}
+	planPath, err := writePlanFile(stateDir, plan)
+	if err != nil {
+		return fail(err)
+	}
+	totals, _ := plan.Summary["totals"].(map[string]any)
+	logFor(f)("计划 " + plan.PlanID)
+	for _, side := range []string{"a2b", "b2a"} {
+		s, _ := plan.Summary[side].(map[string]any)
+		logFor(f)(fmt.Sprintf("  [%s] %v → %v：待复制 %v 条，已存在跳过 %v 条",
+			side, s["from"], s["to"], s["sessions_to_copy"], s["sessions_skipped"]))
+	}
+	logFor(f)(fmt.Sprintf("  合计 %v 条会话，约 %v",
+		totals["sessions_to_copy"], totals["approx_human"]))
+
+	if f.dryRun {
+		logFor(f)("--dry-run：到此为止，没有写入任何数据。")
+		if f.json {
+			return emitJSON(map[string]any{
+				"dry_run": true, "plan_id": plan.PlanID, "plan": plan.AsDict(),
+			})
+		}
+		return 0
+	}
+
+	// ---------------- 3) 确认 ----------------
+	if !f.yes {
+		ok, err := askYesNo(fmt.Sprintf("确认把上述 %v 条会话写入目标目录？",
+			totals["sessions_to_copy"]))
+		if err != nil {
+			return fail(err)
+		}
+		if !ok {
+			logFor(f)("已取消，未写入任何数据。")
+			return 1
+		}
+	}
+
+	// ---------------- 4) 执行 ----------------
+	res, err := bridge.Apply(a, b, bridge.ApplyOptions{
+		PlanPath: planPath,
+		Confirm:  plan.PlanID,
+		StateDir: stateDir,
+	}, logFor(f), warnLine)
+	if err != nil {
+		return fail(err)
+	}
+
+	// ---------------- 5) 核验 ----------------
+	_, verified, err := bridge.Verify(a, b, planPath, logFor(f))
+	if err != nil {
+		return fail(err)
+	}
+	if f.json {
+		return emitJSON(map[string]any{
+			"plan_id": plan.PlanID, "result": res, "verified": verified,
+		})
+	}
+	if !verified {
+		logFor(f)("核验未通过，请查看上方明细；回滚见 restore 子命令。")
+		return 3
+	}
+	logFor(f)("完成。请重启两个 App 后再查看（客户端有内存缓存，不重启看不到新会话）。")
+	return 0
+}
+
+// writePlanFile 把计划落到 state-dir 下的 plans/。
+// apply 会读回它并重新校验源侧指纹，所以文件名必须带 plan_id ——
+// 用固定文件名的话，两次运行之间会互相覆盖，回滚时找不到自己那一份。
+func writePlanFile(stateDir string, plan *bridge.Plan) (string, error) {
+	dir := filepath.Join(stateDir, "plans")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	text, err := pyjson.MarshalIndent(plan.AsDict(), 2)
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, plan.PlanID+".json")
+	return path, os.WriteFile(path, []byte(text+"\n"), 0o600)
+}
+
+// askYesNo 在终端问一次。
+//
+// 读不到交互式终端时**拒绝**而不是默认同意：把「没人回答」当成「同意」，
+// 是这类会改数据的工具最不该有的行为。
+func askYesNo(prompt string) (bool, error) {
+	info, err := os.Stdin.Stat()
+	if err != nil || info.Mode()&os.ModeCharDevice == 0 {
+		return false, fmt.Errorf("当前不是交互式终端，无法确认；确认无误请显式加 --yes")
+	}
+	fmt.Fprintf(os.Stderr, "%s [y/N] ", prompt)
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil && line == "" {
+		return false, err
+	}
+	answer := strings.ToLower(strings.TrimSpace(line))
+	return answer == "y" || answer == "yes", nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func statusNames(items []platform.Status) []string {
+	names := make([]string, 0, len(items))
+	for _, s := range items {
+		names = append(names, s.Display)
+	}
+	return names
+}
+
+func quitNames(items []platform.QuitRequest) []string {
+	names := make([]string, 0, len(items))
+	for _, s := range items {
+		names = append(names, s.Display)
+	}
+	return names
+}
+
+func joinDisplays(names []string) string { return strings.Join(names, "、") }
 
 func cmdVerify(argv []string) int {
 	f, err := parseFlags(argv)
@@ -728,7 +946,7 @@ func cmdVerify(argv []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	results, ok, err := bridge.Verify(a, b, platform.ExpandPath(f.planPath), logLine)
+	results, ok, err := bridge.Verify(a, b, platform.ExpandPath(f.planPath), logFor(f))
 	if err != nil {
 		return fail(err)
 	}
@@ -750,7 +968,7 @@ func cmdRestore(argv []string) int {
 	if f.runDir == "" || f.confirm == "" {
 		return fail(fmt.Errorf("restore 需要 --run-dir 与 --confirm"))
 	}
-	res, err := bridge.Restore(f.runDir, f.confirm, logLine, warnLine)
+	res, err := bridge.Restore(f.runDir, f.confirm, logFor(f), warnLine)
 	if err != nil {
 		return fail(err)
 	}
