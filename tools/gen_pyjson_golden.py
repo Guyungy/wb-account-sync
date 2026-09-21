@@ -221,10 +221,14 @@ def build_indent(cases: list[tuple[str, str]], indent: int = 2) -> list[dict[str
 
 
 def build_fixture() -> dict:
+    # 刻意**不写**生成者的 Python 版本。写了就会让"夹具是否最新"这条校验
+    # 依赖环境：本机是 3.13、CI 是 3.10，同一份用例在两处生成的头部不同，
+    # 于是到处报"夹具已过时"——而用例其实是好的。
+    # 反过来，不写版本还有个好处：夹具在 3.10 与 3.13 上都能逐字节生成，
+    # 这本身就证明了 json.dumps 的这份契约跨版本稳定。
     return {
         "generated_by": "tools/gen_pyjson_golden.py",
         "note": "期望输出由 CPython 现场算出，不是手抄。改动请重跑生成器。",
-        "python": sys.version.split()[0],
         "compact": build_compact(COMPACT),
         "indent2": build_indent(INDENT2),
     }

@@ -45,6 +45,8 @@ class FixtureFreshnessTest(unittest.TestCase):
         with open(FIXTURE, encoding="utf-8") as fh:
             on_disk = fh.read()
         regenerated = gen_pyjson_golden.render(gen_pyjson_golden.build_fixture())
+        # 夹具刻意不含生成者的 Python 版本，所以这条在各种 Python 上都成立
+        # （本机 3.13 生成，CI 上是 3.10，渲染结果必须逐字节相同）。
         self.assertEqual(
             on_disk,
             regenerated,
@@ -53,8 +55,7 @@ class FixtureFreshnessTest(unittest.TestCase):
 
     def test_check_flag_agrees(self) -> None:
         # --check 是 CI/脚本用的入口，它若与测试口径不一致就会两头骗人。
-        self.assertEqual(gen_pyjson_golden.main.__module__, "gen_pyjson_golden")
-        self.assertEqual(0, _run_check())
+        self.assertEqual(0, _run_check(), "--check 报夹具过时，但上面的比对通过了")
 
 
 def _run_check() -> int:

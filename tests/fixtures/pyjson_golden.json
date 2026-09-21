@@ -1,7 +1,6 @@
 {
   "generated_by": "tools/gen_pyjson_golden.py",
   "note": "期望输出由 CPython 现场算出，不是手抄。改动请重跑生成器。",
-  "python": "3.13.12",
   "compact": [
     {
       "label": "int_zero",
