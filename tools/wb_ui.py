@@ -43,6 +43,7 @@ if _TOOLS_DIR not in sys.path:
 import acct_probe  # noqa: E402  同目录模块，只读账号扫描
 import wb_home_bridge as bridge  # noqa: E402  同目录模块
 import wb_platform  # noqa: E402
+import wb_account_switch  # noqa: E402
 
 VERSION = "0.1.0"
 # 是否运行在 PyInstaller 冻结出来的可执行文件里。打包版没有 tools/ 目录，
@@ -126,6 +127,7 @@ class UiState:
         # 账号扫描要读数据库 + 采样日志，一次约 1 秒，不适合每次点击都重跑
         self.accounts_cache: tuple[float, int, dict[str, Any]] | None = None
         self.accounts_lock = threading.Lock()
+        self.switch_lock = threading.Lock()
 
     def home_for(self, key: str) -> bridge.Home:
         return self.home_a if key == "wb" else self.home_b
@@ -287,13 +289,15 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(self._api_state())
             elif url.path == "/api/accounts":
                 self._send_json(self._api_accounts(qs))
+            elif url.path == "/api/switch-accounts":
+                self._send_json(wb_account_switch.discover())
             elif url.path == "/api/survey":
                 self._api_survey()
             elif url.path == "/api/apply":
                 self._api_apply(qs)
             else:
                 self._send_json({"error": f"未知端点 {url.path}"}, 404)
-        except bridge.BridgeError as exc:
+        except (bridge.BridgeError, wb_account_switch.SwitchError) as exc:
             self._send_json({"error": str(exc)}, 400)
 
     def do_POST(self) -> None:  # noqa: N802
@@ -314,9 +318,18 @@ class Handler(BaseHTTPRequestHandler):
                 self._api_backup(body)
             elif url.path == "/api/quit-clients":
                 self._api_quit_clients(body)
+            elif url.path == "/api/switch-account":
+                if not self.state.switch_lock.acquire(blocking=False):
+                    self._send_json({"error": "已有账号切换正在进行"}, 409)
+                    return
+                try:
+                    self._send_json(wb_account_switch.switch(str(body.get("uid") or "")))
+                    self.state.accounts_cache = None
+                finally:
+                    self.state.switch_lock.release()
             else:
                 self._send_json({"error": f"未知端点 {url.path}"}, 404)
-        except bridge.BridgeError as exc:
+        except (bridge.BridgeError, wb_account_switch.SwitchError) as exc:
             self._send_json({"error": str(exc)}, 400)
 
     # -- 端点实现 ---------------------------------------------------------
@@ -726,6 +739,9 @@ table.acct td .dim { color: var(--faint); }
 
   <div class="card">
     <h2>账号与用量</h2>
+    <div id="switch-body" class="hint">正在读取可切换账号…</div>
+    <div class="hint" id="switch-status"></div>
+    <div class="sep"></div>
     <div id="accounts-body" class="hint">正在读取本机账号…</div>
     <div class="actions">
       <button id="btn-accounts">重新读取</button>
@@ -1459,6 +1475,39 @@ async function loadAccounts(refresh) {
 }
 
 $('btn-accounts').onclick = () => loadAccounts(true);
+
+async function loadSwitchAccounts() {
+  try {
+    const data = await api('/api/switch-accounts');
+    const accounts = data.accounts || [];
+    $('switch-body').innerHTML = accounts.length
+      ? accounts.map((a) => `<div class="row" style="align-items:center;margin:6px 0">
+          <span style="flex:1">${esc(a.nickname || a.uid)}
+            ${a.current ? '<span class="pill ok">当前</span>' : ''}</span>
+          <button class="switch-one" data-uid="${esc(a.uid)}" ${a.current ? 'disabled' : ''}>切换</button>
+        </div>`).join('')
+      : '<div class="hint">尚无可切换账号，请先登录 WorkBuddy。</div>';
+    document.querySelectorAll('.switch-one').forEach((btn) => {
+      btn.onclick = async () => {
+        btn.disabled = true;
+        $('switch-status').textContent = '正在保存当前账号并重启 WorkBuddy…';
+        try {
+          await api('/api/switch-account', {method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({uid:btn.dataset.uid})});
+          $('switch-status').textContent = '切换完成，历史会话仍保存在本机。';
+          await loadSwitchAccounts();
+          await loadAccounts(true);
+        } catch (e) {
+          $('switch-status').textContent = '切换失败：' + e.message;
+          btn.disabled = false;
+        }
+      };
+    });
+  } catch (e) {
+    $('switch-body').textContent = '账号读取失败：' + e.message;
+  }
+}
+loadSwitchAccounts();
 
 $('btn-survey').onclick = async () => {
   const btn = $('btn-survey');

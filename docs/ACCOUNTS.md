@@ -111,3 +111,11 @@ python3 tools/acct_probe.py            # 人读摘要，含近 14 天柱子
 python3 tools/acct_probe.py --json     # 面板用的同一份数据
 python3 tools/acct_probe.py --no-logs  # 跳过日志采样，快
 ```
+
+## 本机一键切换账号
+
+在本项目的 Python 本地页面中，「账号与用量」上方会显示已保存的 WorkBuddy 账号，点击「切换」即可更换当前登录账号。首次读取时会导入 `~/.wb-switch/accounts.json` 中已有的账号；之后账号保存在 `~/.wb-home-bridge/accounts.json`，文件权限为仅当前用户可读写。页面接口只返回昵称和 UID，不返回令牌。
+
+切换会先正常退出 WorkBuddy，保存当前登录态，在 `~/.wb-home-bridge/auth-backups/` 备份认证文件，写入目标账号并重新打开 WorkBuddy。若写入或启动失败，恢复原认证文件。历史会话保存在 `~/.workbuddy/workbuddy.db`，切换过程不会修改该数据库。WorkBuddy AI 的登录态也不会更改。
+
+当前一键重启仅支持 macOS。此功能参考了 [wb-switch](https://github.com/changexbc/workbuddy-switch) 的认证文件格式和加密令牌兼容处理；该项目采用 MIT 许可证。切换功能的实现已集成在本仓库，无需依赖第三方切换器继续运行。
