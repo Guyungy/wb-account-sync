@@ -11,6 +11,7 @@ WorkingDirectory=/opt/workbuddy-portal
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=WB_PORTAL_APP_STATE=/var/lib/workbuddy-portal/app
 Environment=WB_PORTAL_METRICS=/var/lib/workbuddy-portal/metrics.sqlite
+EnvironmentFile=/etc/workbuddy-portal-admin.env
 ExecStart=/usr/bin/python3 /opt/workbuddy-portal/portal.py
 Restart=on-failure
 RestartSec=5

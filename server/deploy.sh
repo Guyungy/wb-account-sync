@@ -17,10 +17,17 @@ install -d -m 700 -o workbuddyportal -g workbuddyportal /var/lib/workbuddy-porta
 install -d -m 755 -o root -g root /opt/workbuddy-portal
 install -m 755 "$src/portal.py" /opt/workbuddy-portal/portal.py
 install -m 644 "$src/portal.html" /opt/workbuddy-portal/portal.html
+install -m 644 "$src/admin.html" /opt/workbuddy-portal/admin.html
 install -m 755 "$src/import_enrollments.py" /opt/workbuddy-portal/import_enrollments.py
 install -m 755 "$src/dashboard_build.py" /usr/local/bin/workbuddy-dashboard-build
 install -m 644 "$src/dashboard.html" /var/www/workbuddy-dashboard/index.html
 install -m 644 "$src/workbuddy-portal.service" /etc/systemd/system/workbuddy-portal.service
+
+if [ ! -f /etc/workbuddy-portal-admin.env ]; then
+  printf 'WB_ADMIN_PROXY_SECRET=%s\n' "$(python3 -c 'import secrets; print(secrets.token_hex(32))')" > /etc/workbuddy-portal-admin.env
+fi
+chown root:workbuddyportal /etc/workbuddy-portal-admin.env
+chmod 640 /etc/workbuddy-portal-admin.env
 
 python3 - <<'PY'
 from pathlib import Path
@@ -43,6 +50,29 @@ insert='''\t@workbuddyPortalRoot path /workbuddy/join
 p.write_text(s.replace(needle, insert+needle, 1))
 PY
 
+python3 - <<'PY'
+from pathlib import Path
+import re
+p=Path('/etc/caddy/Caddyfile')
+s=p.read_text()
+if '@workbuddyAdmin path' not in s:
+    auth=re.search(r'\t\tbasic_auth \{\n\t\t\tdashboard [^\n]+\n\t\t\}', s)
+    assert auth, 'Cannot locate existing dashboard authentication'
+    secret=Path('/etc/workbuddy-portal-admin.env').read_text().strip().split('=',1)[1]
+    needle='\t@workbuddy path /workbuddy /workbuddy/*'
+    route=('\t@workbuddyAdminRoot path /workbuddy/admin\n'
+           '\tredir @workbuddyAdminRoot /workbuddy/admin/ 308\n'
+           '\t@workbuddyAdmin path /workbuddy/admin/* /workbuddy/api/admin/*\n'
+           '\thandle @workbuddyAdmin {\n'
+           + auth.group() + '\n'
+           '\t\turi strip_prefix /workbuddy\n'
+           '\t\treverse_proxy 127.0.0.1:18886 {\n'
+           '\t\t\theader_up X-WorkBuddy-Admin ' + secret + '\n'
+           '\t\t}\n\t}\n')
+    assert needle in s
+    p.write_text(s.replace(needle, route+needle, 1))
+PY
+
 # All WorkBuddy endpoints have valid public certificates. Protect refresh tokens in transit.
 python3 - <<'PY'
 from pathlib import Path
@@ -54,8 +84,11 @@ PY
 python3 -m py_compile /opt/workbuddy-portal/portal.py /opt/workbuddy-portal/import_enrollments.py /usr/local/bin/workbuddy-dashboard-build /opt/workbuddy-daily/workbuddy_daily.py
 /usr/local/bin/workbuddy-dashboard-build
 /usr/bin/caddy validate --config /etc/caddy/Caddyfile
+chown root:caddy /etc/caddy/Caddyfile
+chmod 640 /etc/caddy/Caddyfile
 systemctl daemon-reload
-systemctl enable --now workbuddy-portal.service
+systemctl enable workbuddy-portal.service
+systemctl restart workbuddy-portal.service
 systemctl reload caddy
 cat > /etc/cron.d/workbuddy-portal <<'EOF'
 * * * * * root /usr/bin/python3 /opt/workbuddy-portal/import_enrollments.py >> /var/log/workbuddy-portal-import.log 2>&1

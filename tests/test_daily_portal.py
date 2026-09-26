@@ -42,9 +42,10 @@ class PortalTests(unittest.TestCase):
         self.app = root / 'app'
         self.store = root / 'wb_refresh_tokens.json'
         self.store.write_text('{}')
-        self.old_state, self.old_metrics = portal.STATE, portal.METRICS
+        self.old_state, self.old_metrics, self.old_secret = portal.STATE, portal.METRICS, portal.ADMIN_SECRET
         self.old_app, self.old_store, self.old_lock, self.old_token_file = importer.APP, importer.STORE, importer.LOCK, importer.TOKEN_FILE
         portal.STATE, portal.METRICS = self.app, root / 'metrics.sqlite'
+        portal.ADMIN_SECRET = 'test-admin-secret'
         importer.APP, importer.STORE, importer.LOCK, importer.TOKEN_FILE = self.app, self.store, root / 'runner.lock', root / 'access.txt'
         self.addCleanup(self.restore)
         self.server = portal.ThreadingHTTPServer(('127.0.0.1', 0), portal.Handler)
@@ -60,15 +61,17 @@ class PortalTests(unittest.TestCase):
         self.addCleanup(self.login.stop)
 
     def restore(self):
-        portal.STATE, portal.METRICS = self.old_state, self.old_metrics
+        portal.STATE, portal.METRICS, portal.ADMIN_SECRET = self.old_state, self.old_metrics, self.old_secret
         importer.APP, importer.STORE, importer.LOCK, importer.TOKEN_FILE = self.old_app, self.old_store, self.old_lock, self.old_token_file
 
-    def call(self, path, data=None, cookie=None):
+    def call(self, path, data=None, cookie=None, admin=False):
         headers = {'Origin': 'https://aicn.wiki'}
         if data is not None:
             headers['Content-Type'] = 'application/json'
         if cookie:
             headers['Cookie'] = cookie
+        if admin:
+            headers['X-WorkBuddy-Admin'] = 'test-admin-secret'
         req = Request(f'http://127.0.0.1:{self.server.server_port}{path}',
                       data=json.dumps(data).encode() if data is not None else None,
                       headers=headers)
@@ -117,6 +120,22 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(200, self.call('/api/send', {'phone': '13800000001', 'invite': invite})[0])
         self.assertEqual(400, self.call('/api/send', {'phone': '13800000001', 'invite': invite})[0])
         self.assertEqual(1, self.mock_sms.call_count)
+
+    def test_admin_invites_and_account_removal_require_proxy_secret(self):
+        self.assertEqual(403, self.call('/api/admin/state')[0])
+        self.assertEqual(403, self.call('/api/admin/invites', {'count': 1})[0])
+        status, data, _ = self.call('/api/admin/invites', {'count': 1}, admin=True)
+        self.assertEqual(200, status)
+        self.assertEqual(1, len(data['urls']))
+        self.assertEqual(data['urls'][0], self.call('/api/admin/state', admin=True)[1]['invites'][0]['url'])
+        invite = data['urls'][0].split('invite=', 1)[1]
+        self.assertEqual(200, self.call('/api/send', {'phone': '13800000003', 'invite': invite})[0])
+        self.assertEqual(200, self.call('/api/verify', {'phone': '13800000003', 'code': '123456'})[0])
+        self.assertEqual(1, len(self.call('/api/admin/state', admin=True)[1]['accounts']))
+        self.assertEqual(403, self.call('/api/admin/remove', {'account_id': '13800000003'})[0])
+        self.assertEqual(200, self.call('/api/admin/remove', {'account_id': '13800000003'}, admin=True)[0])
+        importer.run()
+        self.assertNotIn('13800000003', json.loads(self.store.read_text()))
 
 
 if __name__ == '__main__':

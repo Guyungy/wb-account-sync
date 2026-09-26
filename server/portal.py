@@ -29,6 +29,8 @@ from urllib.request import Request, urlopen
 STATE = Path(os.environ.get('WB_PORTAL_APP_STATE', '/var/lib/workbuddy-portal/app'))
 METRICS = Path(os.environ.get('WB_PORTAL_METRICS', '/var/lib/workbuddy-portal/metrics.sqlite'))
 HTML = Path(__file__).with_name('portal.html')
+ADMIN_HTML = Path(__file__).with_name('admin.html')
+ADMIN_SECRET = os.environ.get('WB_ADMIN_PROXY_SECRET', '')
 BASE = 'https://www.workbuddy.cn'
 SEND_URL = BASE + '/v2/plugin/login/send-sms'
 LOGIN_URL = BASE + '/v2/plugin/login/token'
@@ -64,7 +66,7 @@ def database() -> sqlite3.Connection:
       CREATE TABLE IF NOT EXISTS accounts (phone TEXT PRIMARY KEY, owner_id TEXT NOT NULL,
         state TEXT NOT NULL, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS invites (code_hash TEXT PRIMARY KEY,
-        created_at INTEGER NOT NULL, used_at INTEGER, owner_id TEXT);
+        created_at INTEGER NOT NULL, used_at INTEGER, owner_id TEXT, code TEXT);
       CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL,
         csrf TEXT NOT NULL, expires_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS sms_attempts (phone TEXT NOT NULL, ip TEXT NOT NULL,
@@ -72,6 +74,8 @@ def database() -> sqlite3.Connection:
       CREATE TABLE IF NOT EXISTS pending (phone TEXT PRIMARY KEY, ip TEXT NOT NULL,
         sent_at INTEGER NOT NULL, invite_hash TEXT, owner_id TEXT, attempts INTEGER NOT NULL DEFAULT 0);
     ''')
+    if 'code' not in [row['name'] for row in db.execute('PRAGMA table_info(invites)')]:
+        db.execute('ALTER TABLE invites ADD COLUMN code TEXT')
     db.commit()
     os.chmod(STATE / 'portal.sqlite', 0o600)
     return db
@@ -163,8 +167,8 @@ def create_invites(count: int) -> list[str]:
         raise ValueError('count must be 1..100')
     with closing(database()) as db:
         codes = [secrets.token_urlsafe(18) for _ in range(count)]
-        db.executemany('INSERT INTO invites(code_hash,created_at) VALUES(?,?)',
-                       [(digest(code), int(time.time())) for code in codes])
+        db.executemany('INSERT INTO invites(code_hash,created_at,code) VALUES(?,?,?)',
+                       [(digest(code), int(time.time()), code) for code in codes])
         db.commit()
     return codes
 
@@ -218,19 +222,49 @@ class Handler(BaseHTTPRequestHandler):
         # Caddy overwrites this header with its own observed remote address.
         return (self.headers.get('X-Real-IP') or self.client_address[0])[:80]
 
+    def is_admin(self) -> bool:
+        return bool(ADMIN_SECRET) and hmac.compare_digest(
+            self.headers.get('X-WorkBuddy-Admin') or '', ADMIN_SECRET)
+
+    def html(self, path: Path) -> None:
+        raw = path.read_bytes()
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(raw)))
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'")
+        self.send_header('X-Frame-Options', 'DENY')
+        self.send_header('Referrer-Policy', 'no-referrer')
+        self.end_headers()
+        self.wfile.write(raw)
+
     def do_GET(self):
         path = urlsplit(self.path).path
+        if path.startswith('/admin/') or path.startswith('/api/admin/'):
+            if not self.is_admin():
+                self.respond(403, {'error': '无权访问'})
+                return
+            if path in ('/admin/', '/admin/index.html'):
+                self.html(ADMIN_HTML)
+            elif path == '/api/admin/state':
+                with closing(database()) as db:
+                    accounts = []
+                    for row in db.execute('SELECT phone,state,created_at FROM accounts WHERE state!=? ORDER BY created_at DESC', ('removed',)):
+                        days = daily_for(row['phone'])
+                        latest = days[0] if days else None
+                        accounts.append({'account_id': row['phone'], 'phone': mask(row['phone']),
+                                         'state': row['state'], 'created_at': row['created_at'],
+                                         'latest': latest})
+                    invites = [{'url': 'https://aicn.wiki/workbuddy/join/?invite=' + row['code'],
+                                'created_at': row['created_at']} for row in db.execute(
+                        'SELECT code,created_at FROM invites WHERE used_at IS NULL AND code IS NOT NULL ORDER BY created_at DESC')]
+                    hidden = db.execute('SELECT COUNT(*) FROM invites WHERE used_at IS NULL AND code IS NULL').fetchone()[0]
+                    self.respond(200, {'accounts': accounts, 'invites': invites, 'unlisted_invites': hidden})
+            else:
+                self.respond(404, {'error': '页面不存在'})
+            return
         if path in ('/', '/index.html'):
-            raw = HTML.read_bytes()
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/html; charset=utf-8')
-            self.send_header('Content-Length', str(len(raw)))
-            self.send_header('Cache-Control', 'no-store')
-            self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'")
-            self.send_header('X-Frame-Options', 'DENY')
-            self.send_header('Referrer-Policy', 'no-referrer')
-            self.end_headers()
-            self.wfile.write(raw)
+            self.html(HTML)
             return
         if path == '/api/me':
             with closing(database()) as db:
@@ -248,15 +282,35 @@ class Handler(BaseHTTPRequestHandler):
         self.respond(404, {'error': '页面不存在'})
 
     def do_POST(self):
+        path = urlsplit(self.path).path
+        if path.startswith('/api/admin/') and not self.is_admin():
+            self.respond(403, {'error': '无权访问'})
+            return
         if not self.same_origin():
             self.respond(403, {'error': '请求来源不正确'})
             return
         try:
             data = self.json_body()
-            path = urlsplit(self.path).path
             with closing(database()) as db:
                 session = self.session(db)
-                if path == '/api/send':
+                if path == '/api/admin/invites':
+                    count = data.get('count', 1)
+                    if type(count) is not int or not 1 <= count <= 10:
+                        raise ValueError('每次可生成 1 到 10 条邀请')
+                    codes = create_invites(count)
+                    self.respond(200, {'urls': ['https://aicn.wiki/workbuddy/join/?invite=' + code for code in codes]})
+                elif path == '/api/admin/remove':
+                    phone = clean_phone(str(data.get('account_id') or ''))
+                    row = db.execute('SELECT owner_id FROM accounts WHERE phone=? AND state!=?',
+                                     (phone, 'removed')).fetchone()
+                    if not row:
+                        self.respond(404, {'error': '找不到这个账号'})
+                    else:
+                        queue_change('remove', phone, row['owner_id'])
+                        db.execute('UPDATE accounts SET state=? WHERE phone=?', ('removing', phone))
+                        db.commit()
+                        self.respond(200, {'ok': True})
+                elif path == '/api/send':
                     self.send_code(db, data, session)
                 elif path == '/api/verify':
                     self.verify(db, data, session)
