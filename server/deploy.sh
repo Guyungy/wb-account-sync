@@ -28,7 +28,8 @@ p=Path('/etc/caddy/Caddyfile')
 s=p.read_text()
 needle='\t@workbuddy path /workbuddy /workbuddy/*'
 assert needle in s, 'Cannot locate existing WorkBuddy route'
-assert '@workbuddyPortal' not in s, 'Portal route already exists'
+if '@workbuddyPortal path' in s:
+    raise SystemExit(0)
 insert='''\t@workbuddyPortalRoot path /workbuddy/join
 \tredir @workbuddyPortalRoot /workbuddy/join/ 308
 \t@workbuddyPortal path /workbuddy/join/*
