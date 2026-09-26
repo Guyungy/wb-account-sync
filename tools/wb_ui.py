@@ -1582,7 +1582,12 @@ async function loadSwitchAccounts() {
       };
     });
   } catch (e) {
-    $('switch-body').textContent = '账号读取失败：' + e.message;
+    if (e.status === 404 || e.status === 501) {
+      document.querySelector('.nav [data-tab="accounts"]').hidden = true;
+      document.querySelector('.nav [data-tab="tools"]').click();
+    } else {
+      $('switch-body').textContent = '账号读取失败：' + e.message;
+    }
   }
 }
 loadSwitchAccounts();
