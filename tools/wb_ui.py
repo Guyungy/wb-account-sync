@@ -43,6 +43,7 @@ if _TOOLS_DIR not in sys.path:
 import acct_probe  # noqa: E402  同目录模块，只读账号扫描
 import wb_home_bridge as bridge  # noqa: E402  同目录模块
 import wb_platform  # noqa: E402
+import wb_account_switch  # noqa: E402
 
 VERSION = "0.1.0"
 # 是否运行在 PyInstaller 冻结出来的可执行文件里。打包版没有 tools/ 目录，
@@ -126,6 +127,7 @@ class UiState:
         # 账号扫描要读数据库 + 采样日志，一次约 1 秒，不适合每次点击都重跑
         self.accounts_cache: tuple[float, int, dict[str, Any]] | None = None
         self.accounts_lock = threading.Lock()
+        self.switch_lock = threading.Lock()
 
     def home_for(self, key: str) -> bridge.Home:
         return self.home_a if key == "wb" else self.home_b
@@ -287,13 +289,15 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(self._api_state())
             elif url.path == "/api/accounts":
                 self._send_json(self._api_accounts(qs))
+            elif url.path == "/api/switch-accounts":
+                self._send_json(wb_account_switch.discover())
             elif url.path == "/api/survey":
                 self._api_survey()
             elif url.path == "/api/apply":
                 self._api_apply(qs)
             else:
                 self._send_json({"error": f"未知端点 {url.path}"}, 404)
-        except bridge.BridgeError as exc:
+        except (bridge.BridgeError, wb_account_switch.SwitchError) as exc:
             self._send_json({"error": str(exc)}, 400)
 
     def do_POST(self) -> None:  # noqa: N802
@@ -314,9 +318,18 @@ class Handler(BaseHTTPRequestHandler):
                 self._api_backup(body)
             elif url.path == "/api/quit-clients":
                 self._api_quit_clients(body)
+            elif url.path == "/api/switch-account":
+                if not self.state.switch_lock.acquire(blocking=False):
+                    self._send_json({"error": "已有账号切换正在进行"}, 409)
+                    return
+                try:
+                    self._send_json(wb_account_switch.switch(str(body.get("uid") or "")))
+                    self.state.accounts_cache = None
+                finally:
+                    self.state.switch_lock.release()
             else:
                 self._send_json({"error": f"未知端点 {url.path}"}, 404)
-        except bridge.BridgeError as exc:
+        except (bridge.BridgeError, wb_account_switch.SwitchError) as exc:
             self._send_json({"error": str(exc)}, 400)
 
     # -- 端点实现 ---------------------------------------------------------
@@ -582,7 +595,7 @@ PAGE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>跨 App 数据目录打通</title>
+<title>WorkBuddy 账号管理</title>
 <style>
 :root {
   --bg: #fafaf8; --panel: #ffffff; --line: #e5e3dd; --text: #22211f;
@@ -717,21 +730,95 @@ table.acct td .dim { color: var(--faint); }
 .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
 .notice { border-radius: 8px; padding: 10px 12px; font-size: 12.5px; margin-top: 12px;
           background: var(--warn-soft); color: var(--warn); }
+/* 桌面首页：账号是主操作，历史数据与同步作为二级页面。 */
+:root { color-scheme:light; --bg:#f5f6fa; --panel:#fff; --line:#e8eaf2;
+  --text:#20243a; --muted:#7b8397; --faint:#a0a6b7; --accent:#655af5;
+  --accent-soft:#efedff; --ok:#1d9e75; --ok-soft:#e1f5ee;
+  --warn:#ba7517; --warn-soft:#faeeda; --bad:#a32d2d; --bad-soft:#fcebeb; --code:#f1f2f6; }
+body { background: #f5f6fa; color: #20243a; font-size: 14px; }
+.wrap { max-width: 1000px; padding: 30px 32px 64px; }
+.app-head { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:30px; }
+.brand { display:flex; align-items:center; gap:13px; }
+.brand-mark { width:42px; height:42px; display:grid; place-items:center; border-radius:13px;
+  color:white; font-size:22px; font-weight:700; background:linear-gradient(140deg,#635bff,#9a6cff);
+  box-shadow:0 8px 22px #635bff38; }
+.brand h1 { margin:0; font-size:17px; font-weight:700; letter-spacing:.01em; }
+.brand small { color:#8990a5; font-size:11px; }
+.nav { display:flex; gap:4px; padding:4px; background:#e9ebf2; border-radius:11px; }
+.nav button { border:0; background:transparent; color:#737b91; padding:8px 17px; border-radius:8px; }
+.nav button.active { background:#fff; color:#343a5d; box-shadow:0 2px 8px #24284615; }
+.page-kicker { color:#6659dd; font-size:12px; font-weight:700; letter-spacing:.1em; }
+.page-title { font-size:29px; font-weight:750; letter-spacing:-.035em; margin:5px 0 3px; }
+.page-subtitle { color:#81899c; margin:0 0 25px; }
+.card { border-color:#e8eaf2; border-radius:17px; box-shadow:0 10px 36px #2730640a; }
+.switch-panel { padding:24px; }
+.switch-panel h2 { font-size:17px; font-weight:700; margin:0; }
+.switch-panel .panel-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+.panel-count { color:#81899c; font-size:12px; }
+.switch-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.switch-card { min-width:0; border:1px solid #e8eaf2; background:#fff; border-radius:14px;
+  padding:18px; display:flex; flex-direction:column; gap:14px; transition:box-shadow .15s,border-color .15s; }
+.switch-card:hover { border-color:#aaa4f9; box-shadow:0 7px 24px #635bff14; }
+.switch-card.current { border-color:#a9a1ff; background:linear-gradient(145deg,#fbfaff,#f6f4ff); }
+.switch-top { display:flex; gap:12px; align-items:center; min-width:0; }
+.account-avatar { flex:none; width:42px; height:42px; border-radius:12px; display:grid; place-items:center;
+  color:#fff; font-size:16px; font-weight:700; background:#7166d9; }
+.switch-card:nth-child(2) .account-avatar { background:#48a3a5; }
+.switch-card:nth-child(3) .account-avatar { background:#ec9a6c; }
+.switch-card:nth-child(4) .account-avatar { background:#668cdd; }
+.switch-ident { min-width:0; flex:1; }
+.switch-name { display:block; font-size:16px; font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.switch-id { display:block; color:#a0a6b7; font-size:11px; margin-top:2px; }
+.switch-foot { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.switch-foot .current-label { color:#6256d8; background:#eceaff; border-radius:100px; padding:5px 10px; font-size:12px; }
+.switch-foot .saved-label { color:#a0a6b7; font-size:12px; }
+.switch-one { background:#655af5; border:0; color:#fff; border-radius:9px; padding:8px 15px; }
+.switch-one:hover { background:#5144e7; }
+.history-toggle { margin-top:18px; }
+.history-toggle > summary { cursor:pointer; color:#5b55ba; font-weight:600; list-style:none; padding:10px 0; }
+.history-toggle > summary::-webkit-details-marker { display:none; }
+.history-toggle > summary::after { content:'  ›'; }
+.history-toggle[open] > summary::after { content:'  ⌄'; }
+.history-content { padding-top:10px; }
+.tab-page[hidden] { display:none !important; }
+@media(max-width:680px) { .wrap{padding:18px 16px 50px} .app-head{align-items:flex-start; flex-direction:column}
+  .switch-grid{grid-template-columns:1fr} .page-title{font-size:25px} }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>跨 App 数据目录打通</h1>
-  <p class="lead">把 WorkBuddy 与 WorkBuddy AI 的历史会话、记忆、技能互相补全。只新增，不覆盖已有数据。</p>
+  <header class="app-head"><div class="brand"><span class="brand-mark">W</span>
+    <div><h1>WorkBuddy 账号管理</h1><small>本机账号与历史记录</small></div></div>
+    <nav class="nav"><button class="active" data-tab="accounts">账号</button><button data-tab="tools">数据同步</button></nav>
+  </header>
 
+  <section id="tab-accounts" class="tab-page">
+  <div class="page-kicker">ACCOUNT MANAGER</div>
+  <h2 class="page-title">你的账号，一处管理</h2>
+  <p class="page-subtitle">点击切换账号，WorkBuddy 会自动重启；本机历史会话继续保留。</p>
+
+  <div class="card switch-panel">
+    <div class="panel-head"><h2>我的账号</h2><span class="panel-count" id="switch-count"></span></div>
+    <div id="switch-body" class="hint">正在读取可切换账号…</div>
+    <div class="hint" id="switch-status"></div>
+  </div>
   <div class="card">
-    <h2>账号与用量</h2>
+    <h2>历史记录与用量</h2>
+    <div class="hint">查看两个客户端保存的会话、累计消耗和账号记录。</div>
+    <details class="history-toggle"><summary>展开详细数据</summary><div class="history-content">
     <div id="accounts-body" class="hint">正在读取本机账号…</div>
     <div class="actions">
       <button id="btn-accounts">重新读取</button>
       <span class="hint" id="accounts-status"></span>
     </div>
+    </div></details>
   </div>
+  </section>
+
+  <section id="tab-tools" class="tab-page" hidden>
+  <div class="page-kicker">DATA SYNC</div>
+  <h2 class="page-title">数据同步</h2>
+  <p class="page-subtitle">在 WorkBuddy 与 WorkBuddy AI 之间备份、迁移和核验历史记录。</p>
 
   <div class="card">
     <h2>一键同步</h2>
@@ -828,11 +915,18 @@ table.acct td .dim { color: var(--faint); }
   </div>
 
   </details>
+  </section>
 </div>
 
 <script>
 const TOKEN = new URLSearchParams(location.search).get('t') || '';
 const $ = (id) => document.getElementById(id);
+document.querySelectorAll('.nav button').forEach((button) => {
+  button.onclick = () => {
+    document.querySelectorAll('.nav button').forEach((item) => item.classList.toggle('active', item === button));
+    document.querySelectorAll('.tab-page').forEach((page) => { page.hidden = page.id !== 'tab-' + button.dataset.tab; });
+  };
+});
 
 const OPTIONS = [
   { key: 'include_changes', label: '会话变更记录', on: true,
@@ -1424,11 +1518,8 @@ function renderAccounts(d) {
   html += `<div class="sep"></div>
     <div class="host">近 ${days} 天积分消耗</div>
     ${renderTrend(homes) || '<div class="hint">没有读到用量记录。</div>'}
-    <div class="notice"><b>关于「剩余积分」：</b>本机磁盘不缓存余额，本地只能算出
-    <b>已消耗</b>总量。剩余额度唯一来源是实时接口
-    <span class="mono">billing/meter/get-user-resource-summary</span>，
-    它要的 access token 只活在客户端主进程内存里，不落盘、不写钥匙串。
-    要知道还剩多少，请打开客户端看账户页。</div>
+    <div class="notice"><b>关于「剩余积分」：</b>此面板目前显示本机记录的
+    <b>已消耗</b>总量；实时剩余额度尚未接入此面板，请打开 WorkBuddy 账户页查看。</div>
     <div class="hint">读取时间 ${esc(d.generated_at)}${d.cached ? '（命中缓存）' : ''} ·
     全程只读，未写入任何客户端数据。</div>`;
   $('accounts-body').innerHTML = html;
@@ -1459,6 +1550,47 @@ async function loadAccounts(refresh) {
 }
 
 $('btn-accounts').onclick = () => loadAccounts(true);
+
+async function loadSwitchAccounts() {
+  try {
+    const data = await api('/api/switch-accounts');
+    const accounts = data.accounts || [];
+    $('switch-count').textContent = accounts.length + ' 个已保存账号';
+    $('switch-body').innerHTML = accounts.length
+      ? '<div class="switch-grid">' + accounts.map((a, i) => `<div class="switch-card ${a.current ? 'current' : ''}">
+          <div class="switch-top"><span class="account-avatar">${String(i + 1).padStart(2, '0')}</span>
+            <span class="switch-ident"><span class="switch-name">${esc(a.nickname || '未命名账号')}</span>
+              <span class="switch-id">ID ${esc(a.uid.slice(0, 8))}</span></span></div>
+          <div class="switch-foot"><span class="${a.current ? 'current-label' : 'saved-label'}">${a.current ? '● 当前使用' : '已保存登录状态'}</span>
+            <button class="switch-one" data-uid="${esc(a.uid)}" ${a.current ? 'disabled' : ''}>${a.current ? '使用中' : '切换账号'}</button></div>
+        </div>`).join('') + '</div>'
+      : '<div class="hint">尚无可切换账号，请先登录 WorkBuddy。</div>';
+    document.querySelectorAll('.switch-one').forEach((btn) => {
+      btn.onclick = async () => {
+        btn.disabled = true;
+        $('switch-status').textContent = '正在保存当前账号并重启 WorkBuddy…';
+        try {
+          await api('/api/switch-account', {method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({uid:btn.dataset.uid})});
+          $('switch-status').textContent = '切换完成，历史会话仍保存在本机。';
+          await loadSwitchAccounts();
+          await loadAccounts(true);
+        } catch (e) {
+          $('switch-status').textContent = '切换失败：' + e.message;
+          btn.disabled = false;
+        }
+      };
+    });
+  } catch (e) {
+    if (e.status === 404 || e.status === 501) {
+      document.querySelector('.nav [data-tab="accounts"]').hidden = true;
+      document.querySelector('.nav [data-tab="tools"]').click();
+    } else {
+      $('switch-body').textContent = '账号读取失败：' + e.message;
+    }
+  }
+}
+loadSwitchAccounts();
 
 $('btn-survey').onclick = async () => {
   const btn = $('btn-survey');
@@ -1681,7 +1813,7 @@ def _startup_open(url: str) -> None:
         pass
 
 
-def open_window(url: str, title: str = "跨 App 数据目录打通") -> bool:
+def open_window(url: str, title: str = "WorkBuddy 账号管理") -> bool:
     """用系统自带的 WebView 开一个**属于本应用自己的窗口**。
 
     界面仍然是那个本地页面，但不再往外跳浏览器：macOS 走 WKWebView、

@@ -68,7 +68,7 @@ def _selftest() -> int:
     # wb_autosync 和 acct_probe 在界面里都是延迟 import，最容易被漏掉
     # （acct_probe 由 wb_ui 在请求 /api/accounts 时才导入，静态分析追不到），
     # 漏打的现象是"面板点开就报错"，窗口模式还看不到堆栈，所以这里一并验证。
-    for name in ("wb_ui", "wb_home_bridge", "wb_platform", "wb_autosync", "acct_probe"):
+    for name in ("wb_ui", "wb_home_bridge", "wb_platform", "wb_account_switch", "wb_autosync", "acct_probe"):
         try:
             module = __import__(name)
             modules[name] = str(getattr(module, "VERSION", "ok"))

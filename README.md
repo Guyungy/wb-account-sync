@@ -62,7 +62,11 @@ macOS 用户也可以直接双击 [`tools/ui.command`](tools/ui.command)，把�
 | macOS | `wb-account-sync-macos.zip` | 解压出 `wb-account-sync.app`，拖进「应用程序」，双击 |
 | Windows | `wb-account-sync-windows.zip` | 解压出 `wb-account-sync.exe`，双击 |
 
-自带 Python 运行时，约 20 MB，运行时不依赖任何第三方库。双击后浏览器自动打开界面。
+自带 Python 运行时，双击后打开独立桌面窗口。账号与用量面板支持本机账号一键切换；切换前会备份登录状态，历史会话保留在本机。
+
+### 可选的服务器每日看板
+
+`server/` 提供独立的 WorkBuddy Daily 扩展：保存每日签到、积分和成长任务快照，并提供仅限邀请的自助添加账号页面。受邀人通过自己的手机验证码授权，只能查看和管理自己添加的账号。管理员看板仍需原有密码。部署方式和隔离设计见 [server/README.md](server/README.md)。这部分是可选服务，不影响桌面版的本地数据同步。
 
 两个系统首次打开都会拦一次（因为没买代码签名证书）：macOS 上**右键 → 打开**，
 Windows 上点**「更多信息」→「仍要运行」**。

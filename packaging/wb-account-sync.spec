@@ -46,6 +46,7 @@ HIDDEN_IMPORTS = [
     "wb_ui",
     "wb_home_bridge",
     "wb_platform",
+    "wb_account_switch",
     "wb_autosync",
     # 账号面板的扫描引擎：wb_ui 在运行时按 sys.path 导入它，静态分析追不到
     "acct_probe",
@@ -129,7 +130,7 @@ else:
             bundle_identifier="io.github.guyungy.wb-account-sync",
             info_plist={
                 "CFBundleName": "wb-account-sync",
-                "CFBundleDisplayName": "WorkBuddy 跨 App 数据打通",
+                "CFBundleDisplayName": "WorkBuddy 账号管理与同步",
                 "CFBundleShortVersionString": VERSION,
                 "CFBundleVersion": VERSION,
                 "LSMinimumSystemVersion": "11.0",
