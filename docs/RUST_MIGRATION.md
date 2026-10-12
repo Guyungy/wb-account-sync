@@ -1,5 +1,11 @@
 # Rust + TypeScript 迁移方案
 
+> 2026-10-12 实现更新：新增 `crates/wb-server` 与 `desktop/src-tauri`。
+> Tauri 原生窗口通过 IPC 调用账号、同步和恢复功能；推理服务仅暴露 `/healthz`、
+> `/v1/models`、`/v1/chat/completions`，不提供网页管理入口。该决定替代下文的
+> 「窗口加载本地 HTTP 管理页面」方案。新增关联副本同步是独立能力，未完成模块仍
+> 不代表旧跨 home 引擎已逐项移植。构建及支持范围见 `DESKTOP_GATEWAY.md`。
+
 - 定稿：2026-09-21
 - 决策依据：用户要求「改一下用 Rust TypeScript 为主」，界面形态选定 **Tauri 2 桌面应用**（2026-09-21 由 `wry + tao` 改定，见下方「形态变更」），Go 底座移入 `legacy-go/` 保留参照
 - 前置条件：**磁盘可用空间 ≥ 8 GB**（见 `outputs/disk-report-2026-09-21.md`）。Tauri 的依赖树比自建窗口重得多，具体见「形态变更」。

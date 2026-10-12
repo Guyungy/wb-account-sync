@@ -1,0 +1,26 @@
+name: Native desktop build
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install UI tools
+        run: npm --prefix web ci --no-audit --no-fund
+      - name: Type-check UI
+        run: npm --prefix web run check
+      - name: Build native app and disk image
+        working-directory: desktop
+        env:
+          CARGO_TARGET_DIR: ../target
+        run: npm run build -- --bundles app,dmg
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wb-account-sync-desktop-macos
+          path: |
+            target/release/bundle/macos/*.app
+            target/release/bundle/dmg/*.dmg
+          if-no-files-found: error

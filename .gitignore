@@ -38,6 +38,8 @@ legacy-go/**/*.test
 # Rust 构建产物（主底座；P0 之后生效）
 target/
 crates/*/target/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
 web/node_modules/
 web/dist/
 

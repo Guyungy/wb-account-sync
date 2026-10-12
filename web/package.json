@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "跨 App 数据目录打通的界面（TypeScript）",
+  "description": "Tauri 本地桌面工作台的 TypeScript 界面",
   "scripts": {
     "check": "tsc --noEmit",
     "build": "tsc && node build.mjs",
-    "smoke": "node smoke.mjs"
+    "smoke:legacy": "node smoke.mjs"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "2.12.2",
     "typescript": "^5.6.3"
   }
 }

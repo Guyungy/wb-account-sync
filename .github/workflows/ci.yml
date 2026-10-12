@@ -52,8 +52,7 @@ jobs:
       - name: Run Rust tests
         run: cargo test --workspace --locked
   # 前端（TypeScript）。同样不引第三方 action —— runner 自带 Node。
-  # 现在只做类型检查 + 构建；等 wb-server 开始 rust-embed web/dist 之后，
-  # 这个 job 必须排在 rust 之前（embed 在编译期就要读那个目录，缺了直接编译失败）。
+  # 这是 Tauri 桌面资源；Rust 服务本身不嵌入或提供网页管理入口。
   web:
     runs-on: ubuntu-latest
     steps:
@@ -78,8 +77,21 @@ jobs:
           assert 'src="./main.js"' in html, "index.html 没有引用 ./main.js"
           print("dist 自包含检查通过")
           PY
+  desktop:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Build desktop resources
+        run: |
+          npm --prefix web ci --no-audit --no-fund
+          npm --prefix web run check
+          npm --prefix web run build
+      - name: Check native desktop host
+        env:
+          CARGO_TARGET_DIR: target
+        run: cargo check --manifest-path desktop/src-tauri/Cargo.toml --locked
   package:
-    needs: [test, rust, web]
+    needs: [test, rust, web, desktop]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683

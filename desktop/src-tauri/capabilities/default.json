@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Local main window only; no remote URL permissions",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

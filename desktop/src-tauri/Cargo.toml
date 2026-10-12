@@ -1,0 +1,24 @@
+[package]
+name = "wb-account-sync"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Local WorkBuddy account and session desktop application"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde_json = "1"
+wb-server = { path = "../../crates/wb-server" }
+tokio = { version = "1", features = ["sync", "net"] }
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "z"
+strip = true

@@ -1,8 +1,8 @@
 # wb-account-sync
 
 <p align="center">
-  <strong>WorkBuddy 账号数据安全迁移与跨 App 打通工具</strong><br>
-  离线 · 显式确认 · 可回滚 · 零运行时依赖
+  <strong>WorkBuddy 本地桌面工作台：账号切换 · 全部会话同步 · OpenAI 兼容网关</strong><br>
+  Rust + Tauri 2 + TypeScript · 本地管理 · 备份与恢复
 </p>
 
 <p align="center">
@@ -36,6 +36,24 @@
 ---
 
 ## 30 秒上手
+
+### 本地桌面端（新增）
+
+双击 `wb-account-sync.app` 打开原生窗口，运行时无需 Python、Node 或 Rust：
+
+- **账号切换**：保存 / 官方授权 / 导入本人账号，一键退出客户端、备份认证、切换并重启。
+- **全部会话同步**：给所选账号保留独立副本，包含正文、工具结果、附件与文件历史；支持增量、冲突检测和恢复。
+- **OpenAI 兼容网关**：桌面应用提供本机 `/v1/chat/completions` 与 `/v1/models`，支持流式、工具调用、账号轮转与令牌刷新。
+
+管理功能通过 Tauri IPC 调用，不提供网页管理入口。源码启动：
+
+```bash
+./tools/desktop.command
+```
+
+构建 `.app` / `.dmg`、配置和验证边界见 [桌面工作台说明](docs/DESKTOP_GATEWAY.md)。当前新增桌面版本为 `0.1.0`，Python 迁移工具仍为 `0.3.0a1`；新增功能不在旧 Python 打包应用内。
+
+以下保留原 Python 迁移工具的使用方式。
 
 如果你本机同时装了 **WorkBuddy** 和 **WorkBuddy AI**，它们的数据互相隔离。
 这个工具可以把两边的会话历史、记忆、技能、配置做**双向合并**，且不会覆盖任何已有数据。
@@ -220,6 +238,8 @@ python3 tools/autosync_check.py   # 自动同步层端到端（10 项）
 ---
 
 ## 文档
+
+- [`docs/DESKTOP_GATEWAY.md`](docs/DESKTOP_GATEWAY.md) — 新增 Rust / Tauri 桌面工作台：网关、账号切换与全部会话同步
 
 - [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md) — 桌面应用：下载、首次放行、平台差异与自行构建
 - [`docs/HOME_BRIDGE.md`](docs/HOME_BRIDGE.md) — 跨 App 数据目录打通与自动同步详细说明

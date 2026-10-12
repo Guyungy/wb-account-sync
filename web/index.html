@@ -3,26 +3,72 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>跨 App 数据目录打通</title>
+<title>WorkBuddy 工作台</title>
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<header>
-  <h1>跨 App 数据目录打通</h1>
-  <p class="sub">把 WorkBuddy 与 WorkBuddy AI 两个客户端的数据目录打通</p>
-</header>
+<aside class="sidebar"><header class="topbar">
+  <div><span class="brand-mark">W</span><h1>WorkBuddy<span>本地工作台</span></h1></div>
+  <span class="pill" id="connection">连接中</span>
+</header>  <nav aria-label="功能">
+    <button class="tab active" data-tab="accounts" type="button">账号管理</button>
+    <button class="tab" data-tab="sessions" type="button">会话同步</button>
+    <button class="tab" data-tab="gateway" type="button">API 网关</button>
+  </nav>
+<div class="sidebar-bottom"><span class="local-dot"></span> 数据保存在本机<br><small>桌面端 · 本地服务</small></div></aside>
 
 <main>
-  <section id="gate" aria-live="polite"></section>
+  <div class="workspace-bar"><span id="page-label">账号管理</span><button id="refresh" type="button" class="quiet">↻ 刷新状态</button></div><section id="gate" aria-live="polite"></section>
 
-  <section>
-    <h2>客户端</h2>
-    <div id="clients"></div>
+  <div id="clients" class="grid two"></div>
+  <p id="message" role="status" aria-live="polite"></p>
+  <section id="accounts" class="view">
+    <div class="page-heading"><div><span class="eyebrow">ACCOUNTS</span><h2>账号管理</h2><p class="sub">管理登录身份，在账号间继续工作。</p></div><button id="add-account" class="primary">＋ 添加账号</button></div>
+    <label class="check"><input type="checkbox" id="sync-on-switch" checked> 切换时同步全部会话到目标账号（会退出两个客户端）</label>
+    <div class="toolbar"><input id="account-search" type="search" placeholder="搜索昵称或账号 ID" aria-label="搜索账号"><select id="account-filter" aria-label="按客户端筛选"><option value="all">全部客户端</option><option value="cn">WorkBuddy</option><option value="ai">WorkBuddy AI</option></select></div><div class="section-label">已保存账号 <span id="account-count">0</span></div><div id="account-list" class="account-list"></div><p class="sub hint">切换将备份登录态，退出客户端并重新打开。</p>
+
   </section>
+  <section id="sessions" class="view" hidden>
+    <span class="eyebrow">CONVERSATIONS</span><h2>会话同步</h2><div class="steps"><span>01 选择账号</span><span>02 检查计划</span><span>03 备份并同步</span></div>
+    <p class="sub">扫描两个客户端的全部未删除会话，给所选账号建立独立副本，包含正文、工具结果、附件和文件历史。原账号归属保持不变。</p>
+    <div class="card"><h3>选择接收会话的账号</h3><div class="toolbar"><button id="select-all">全选</button><button id="select-none">清空选择</button><span id="selected-count" class="sub"></span></div><div id="sync-targets"></div><p class="sub">选择本人有权管理的个人账号。自动化任务、授权凭据、云端映射和积分消耗记录不复制；删除不会传播。</p><button id="make-plan" class="primary" type="button">预览全部会话同步</button></div>
+    <div id="plan-view" class="card" hidden>
+      <h3>同步计划</h3><div id="plan-summary"></div><div id="plan-issues"></div>
+      <p class="sub">确认前请退出两个客户端。执行会先备份，再校验数据是否发生变化。</p>
+      <label class="check"><input id="confirm-plan" type="checkbox">我已检查计划，确认备份并同步所选账号的会话</label><p id="apply-hint" class="sub"></p><details><summary>计划标识</summary><code id="plan-id"></code></details>
+      <button id="apply-plan" type="button" class="primary" disabled>备份并执行同步</button>
+    </div>
+    <details class="card recovery"><summary>恢复与撤销</summary><div id="pending-runs"></div><div id="recent-runs"></div><p class="sub">恢复会检查后续修改；有变化时会停止，保留备份供检查。</p><label>运行编号 <input id="restore-id" placeholder="执行结果中的 run_id"></label><button id="restore" type="button">恢复这次同步前的数据</button></details>
+  </section>
+  <section id="gateway" class="view" hidden>
+    <span class="eyebrow">LOCAL GATEWAY</span><h2>API 网关 <span class="pill stopped">本机服务</span></h2>
+    <p class="sub">使用已授权账号转发请求，支持账号轮转、会话粘性、冷却、令牌刷新，以及流式和非流式工具调用。</p>
+    <div class="card">
+      <label>Base URL <div class="inline"><input id="base-url" readonly><button id="copy-url">复制地址</button></div></label>
+      <label>API Key <div class="inline"><input id="api-key" type="password" readonly><button id="show-key" type="button">显示</button><button id="copy-key" type="button">复制</button></div></label>
+      <p class="sub">管理功能仅在桌面窗口内调用。网关默认监听本机，关闭应用即停止服务。</p>
+      <button id="models" type="button">查询可用模型</button><pre id="model-list"></pre>
+    </div>
+    <div id="gateway-stats" class="grid three"></div>
+    <div class="card"><div class="client-head"><h3>客户端接入示例</h3><button id="copy-example">复制示例</button></div><pre id="gateway-example"></pre></div>
+  </section>
+  <details class="result"><summary>查看诊断详情</summary><pre id="result"></pre></details>
 </main>
 
-<footer>
-  <p id="meta"></p>
+<dialog id="account-dialog"><div class="dialog-heading"><h2>添加账号</h2><button id="close-dialog" aria-label="关闭">✕</button></div><p class="sub">选择客户端后，授权登录或保存已有登录态。</p>
+    <div class="toolbar">
+      <label>客户端 <select id="variant"><option value="cn">WorkBuddy</option><option value="ai">WorkBuddy AI</option></select></label>
+      <button id="oauth" type="button" class="primary">官方授权登录</button>
+      <button id="import-local" type="button">保存当前登录账号</button>
+
+    </div>
+    <div id="oauth-status" class="notice" hidden></div>
+    <details class="card"><summary>导入已授权账号</summary>
+      <p class="sub">支持官方认证 JSON、workbuddy-switch 导出和 workbuddy2api 凭证。凭据只保存到本机状态目录。</p>
+      <textarea id="account-json" rows="6" aria-label="账号 JSON" placeholder="粘贴账号 JSON"></textarea>
+      <button id="import-json" type="button">导入账号</button>
+    </details></dialog><dialog id="switch-dialog"><div class="dialog-heading"><h2>切换账号</h2><button id="cancel-switch" aria-label="取消切换">✕</button></div><p id="switch-summary" class="sub"></p><button id="confirm-switch" class="primary">确认切换并重启客户端</button></dialog><footer>
+  <p id="meta">账号库与同步数据保存在本机 · 网关请求转发至上游服务</p>
 </footer>
 
 <script type="module" src="./main.js"></script>

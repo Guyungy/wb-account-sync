@@ -1,0 +1,24 @@
+[package]
+name = "wb-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Self-hosted WorkBuddy gateway, account switching and linked session sync"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+uuid = { version = "1", features = ["v4", "serde"] }
+rusqlite = { version = "0.40.2", features = ["bundled", "backup"] }
+fs2 = "0.4"
+subtle = "2"
+async-stream = "0.3"
+futures-util = "0.3"
+tower = { version = "0.5", features = ["util"] }
+
+[dev-dependencies]
+tempfile = "3"
