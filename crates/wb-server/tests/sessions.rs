@@ -581,3 +581,19 @@ fn different_schemas_refuse_required_target_column_without_default() {
         .expect("incompatible schema must fail");
     assert!(error.contains("required_flag"));
 }
+
+#[test]
+fn database_digest_uses_existing_transaction_snapshot() {
+    let f = Fixture::new();
+    f.source(0, "source", "alice");
+    let mut reader = Connection::open(f.clients[0].home.join("workbuddy.db")).unwrap();
+    reader.execute_batch("PRAGMA journal_mode=WAL;").unwrap();
+    let initial = sessions::db_digest(&reader).unwrap();
+    let tx = reader.transaction().unwrap();
+    assert_eq!(sessions::db_digest(&tx).unwrap(), initial);
+    let writer = Connection::open(f.clients[0].home.join("workbuddy.db")).unwrap();
+    writer.execute("UPDATE sessions SET title='changed' WHERE id='source'", []).unwrap();
+    assert_eq!(sessions::db_digest(&tx).unwrap(), initial);
+    tx.rollback().unwrap();
+    assert_ne!(sessions::db_digest(&reader).unwrap(), initial);
+}

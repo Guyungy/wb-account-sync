@@ -39,6 +39,7 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
   catch (error) { throw new Error(typeof error === "string" ? error : String(error)); }
 }
 function message(text: string, error = false): void {
+  if (text.includes("Database changed after preview; regenerate the plan")) text = text.replace("Database changed after preview; regenerate the plan", "数据库在预览后发生变化，本次操作已停止。请确认客户端完全退出后重新预览；切换账号可直接重试。");
   el("message").textContent = text;
   el("message").className = error ? "notice error" : "notice";
 }

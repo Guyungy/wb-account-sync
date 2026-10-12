@@ -81,21 +81,7 @@ impl Client {
                 // Match executable/bundle, never arbitrary words in a shell command or script.
                 let executable = cmd.trim_start();
                 let matches = if cfg!(target_os = "macos") {
-                    let suffix = if self.variant == "ai" {
-                        "WorkBuddy AI.app/Contents/MacOS/"
-                    } else {
-                        "WorkBuddy.app/Contents/MacOS/"
-                    };
-                    let configured = if self.app.starts_with("/Applications/") {
-                        executable.contains(suffix)
-                    } else {
-                        executable.starts_with(&format!("{}/Contents/MacOS/", self.app))
-                    };
-                    executable.starts_with('/')
-                        && configured
-                        && !executable.contains("/Frameworks/")
-                        && (executable.contains("/Contents/MacOS/Electron")
-                            || executable.contains("/Contents/MacOS/WorkBuddy"))
+                    mac_bundle_process(&self.app, executable)
                 } else {
                     let first = executable.split_whitespace().next().unwrap_or("");
                     let name = std::path::Path::new(first)
@@ -203,5 +189,35 @@ impl Client {
             json!({"variant":self.variant,"display":if self.variant=="ai" {"WorkBuddy AI"} else {"WorkBuddy"},
             "running":!ids.is_empty(),"pids":ids,"home":self.home,"db_exists":self.home.join("workbuddy.db").is_file(),"current_uid":uid}),
         )
+    }
+}
+
+fn mac_bundle_process(app: &str, command: &str) -> bool {
+    // The configured bundle path is an executable prefix, not a match in arguments.
+    command.starts_with(&format!("{app}/Contents/"))
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn tracks_main_and_helpers_but_not_other_clients_or_shell_arguments() {
+        let app = "/Applications/WorkBuddy.app";
+        assert!(mac_bundle_process(
+            app,
+            "/Applications/WorkBuddy.app/Contents/MacOS/Electron"
+        ));
+        assert!(mac_bundle_process(app, "/Applications/WorkBuddy.app/Contents/Frameworks/WorkBuddy Helper.app/Contents/MacOS/WorkBuddy Helper --type=utility"));
+        assert!(!mac_bundle_process(
+            app,
+            "/Applications/WorkBuddy AI.app/Contents/MacOS/Electron"
+        ));
+        assert!(!mac_bundle_process(
+            app,
+            "/bin/zsh -c /Applications/WorkBuddy.app/Contents/MacOS/Electron"
+        ));
+        assert!(!mac_bundle_process(
+            app,
+            "/Applications/WorkBuddy.app.backup/Contents/MacOS/Electron"
+        ));
     }
 }

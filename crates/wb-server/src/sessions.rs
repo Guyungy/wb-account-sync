@@ -132,6 +132,13 @@ fn schema_ok(con: &Connection) -> Result<()> {
     Ok(())
 }
 pub fn db_digest(con: &Connection) -> Result<String> {
+    if con.is_autocommit() {
+        let tx = con.unchecked_transaction().map_err(|e| e.to_string())?;
+        return db_digest_snapshot(&tx);
+    }
+    db_digest_snapshot(con)
+}
+fn db_digest_snapshot(con: &Connection) -> Result<String> {
     let schema = rows(
         con,
         "SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY type,name",
@@ -932,6 +939,34 @@ fn put_row(con: &Connection, change: &RowChange) -> Result<()> {
     }
     Ok(())
 }
+/// Account switching has no user-reviewed preview: rebuild only after pre-write drift.
+pub fn sync_for_switch(clients: &[Client], targets: &[Account], state: &Path) -> Result<Value> {
+    retry_before_writes(|| {
+        if !pending(state)?.is_empty() {
+            return Err("存在中断的同步，请先恢复，再切换账号。".into());
+        }
+        for client in clients {
+            client.require_stopped()?;
+        }
+        let plan = build(clients, targets, state)?;
+        apply(&plan, &plan.plan_id, clients, state)
+    })
+}
+fn retry_before_writes(mut work: impl FnMut() -> Result<Value>) -> Result<Value> {
+    for attempt in 0..3 {
+        match work() {
+            Err(error) if error == "Database changed after preview; regenerate the plan" => {
+                if attempt == 2 {
+                    return Err("客户端退出后数据库仍在变化，账号尚未切换。请确认 WorkBuddy 及其辅助进程已完全退出后重试。".into());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(300));
+            }
+            result => return result,
+        }
+    }
+    unreachable!()
+}
+
 pub fn apply(plan: &Plan, confirm: &str, clients: &[Client], state: &Path) -> Result<Value> {
     apply_with_checkpoint(plan, confirm, clients, state, |_| {})
 }
@@ -1160,4 +1195,55 @@ pub fn restore(run_id: &str, clients: &[Client], state: &Path) -> Result<Value> 
     j.status = "restored".into();
     files::atomic_json(&path, &j)?;
     Ok(json!({"status":"restored","run_id":run_id}))
+}
+
+#[cfg(test)]
+mod switch_retry_tests {
+    use super::*;
+    #[test]
+    fn shutdown_drift_rebuilds_before_writing() {
+        let mut attempts = 0;
+        let result = retry_before_writes(|| {
+            attempts += 1;
+            if attempts == 1 {
+                Err("Database changed after preview; regenerate the plan".into())
+            } else {
+                Ok(json!({"status":"committed"}))
+            }
+        })
+        .unwrap();
+        assert_eq!(attempts, 2);
+        assert_eq!(result["status"], "committed");
+    }
+    #[test]
+    fn drift_after_journal_or_other_errors_never_retry() {
+        for error in [
+            "Database changed after preview; regenerate the plan. Recovery run: run",
+            "Database changed while syncing",
+            "File drift",
+            "Client is running",
+        ] {
+            let mut attempts = 0;
+            assert_eq!(
+                retry_before_writes(|| {
+                    attempts += 1;
+                    Err(error.into())
+                })
+                .unwrap_err(),
+                error
+            );
+            assert_eq!(attempts, 1);
+        }
+    }
+    #[test]
+    fn continuous_drift_is_bounded() {
+        let mut attempts = 0;
+        let error = retry_before_writes(|| {
+            attempts += 1;
+            Err("Database changed after preview; regenerate the plan".into())
+        })
+        .unwrap_err();
+        assert_eq!(attempts, 3);
+        assert!(error.contains("账号尚未切换"));
+    }
 }

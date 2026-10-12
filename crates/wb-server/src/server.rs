@@ -586,8 +586,7 @@ async fn switch(State(app): State<Arc<App>>, Json(body): Json<Value>) -> Respons
         let sync=if sync_all {
             // Closing both clients is part of the explicitly selected "sync all" action.
             for c in &clients {c.quit()?;}
-            let plan=sessions::build(&clients,&[account.clone()],&dir)?;
-            Some(sessions::apply(&plan,&plan.plan_id,&clients,&dir)?)
+            Some(sessions::sync_for_switch(&clients,&[account.clone()],&dir)?)
         } else {None};
         let _home_lock=if client.home.is_dir() {Some(files::Lock::acquire(&client.home.join(".wb-operations.lock"))?)} else {None};
         client.require_stopped()?;
